@@ -820,9 +820,8 @@ namespace KSTS
         public int crewCapacity = 0;
         public List<string> dockingPortTypes = null;
 
-        // True when the payload was delivered to a body other than the one the rocket launched from.
-        // Such profiles constrain the deploy-orbit (see GUIOrbitEditor / GUIMissionProfileSelector),
-        // because a plane- or altitude-change at the destination was not demonstrated on the recording.
+        // True when payload was delivered to a body other than the launch body. Such profiles constrain the deploy
+        // orbit (altitude / inclination / eccentricity / LAN), since that manoeuvre was not demonstrated on the record.
         public bool IsForeignBodyDelivery()
         {
             return !string.IsNullOrEmpty(launchBodyName) && destinationBodyName != launchBodyName;

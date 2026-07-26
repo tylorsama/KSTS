@@ -226,9 +226,8 @@ namespace KSTS
                     }
                     description += " @ " + maxAltitude + "\n";
 
-                    // Off-origin orbit tolerance: inclination, eccentricity and ascending node must stay near the
-                    // recorded values, because a plane- or shape-change at the destination was not demonstrated.
-                    // The values are rendered and coloured so the player sees WHY an out-of-plane target is rejected.
+                    // Off-origin: target must stay within tolerance of the recorded inclination/eccentricity/LAN.
+                    // Rendered and coloured so the player sees which axis (e.g. an out-of-plane node) rejects it.
                     if (missionProfile.IsForeignBodyDelivery())
                     {
                         var inclination = missionProfile.deployInclination.ToString("0.0") + "°";
@@ -250,7 +249,7 @@ namespace KSTS
                         var lan = missionProfile.deployLAN.ToString("0.0") + "°";
                         if (this.filterLAN != null)
                         {
-                            if (Math.Abs((double)this.filterLAN - missionProfile.deployLAN) > KSTSSettings.ToleranceInclination) { isValidProfile = false; color = red; }
+                            if (Math.Abs((double)this.filterLAN - missionProfile.deployLAN) > KSTSSettings.ToleranceLAN) { isValidProfile = false; color = red; }
                             else color = green;
                             lan = "<color=" + color + ">" + lan + "</color>";
                         }

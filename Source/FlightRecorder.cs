@@ -797,9 +797,8 @@ namespace KSTS
                         }
                         else
                         {
-                            // Ignore tiny drains (<1% of capacity): life-support mods like Kerbalism slowly consume
-                            // supplies (nitrogen, oxygen, ...) even from EMPTY crew pods by default(pressurte control can be disabled manually)
-                            //  which would otherwise wrongly // mark such a pod as "used". "lastAmount" is the baseline, so "consumed" is the total drain.
+                            // Ignore tiny drains (<1% of capacity): mods like Kerbalism slowly drain supplies even from EMPTY
+                            // crew pods, which would otherwise mark them "used". lastAmount is the baseline (first seen).
                             var consumed = Math.Abs(lastAmount - resource.amount);
                             if (resource.maxAmount > 0 && consumed > KSTSSettings.UsedPartResourceThreshold * resource.maxAmount)
                             {

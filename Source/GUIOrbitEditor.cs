@@ -33,9 +33,8 @@ namespace KSTS
 
         public void Reset()
         {
-            // For deliveries to a body other than the launch body the demonstrated orbit becomes a floor:
-            // altitude can only go up (to just below the SoI), and inclination/eccentricity are limited to a
-            // tolerance band around the recorded values (a plane- or shape-change was not demonstrated).
+            // Off-origin delivery (see MissionProfile.IsForeignBodyDelivery): altitude may only rise (floor =
+            // recorded, ceiling = just below SoI); inclination/eccentricity/LAN are pinned near the recorded orbit.
             var offOrigin = this.missionProfile.IsForeignBodyDelivery();
             double floorAltitude = offOrigin ? this.missionProfile.maxAltitude : this.missionProfile.minAltitude;
             double ceilingAltitude = this.missionProfile.maxAltitude;
@@ -52,8 +51,8 @@ namespace KSTS
             double minEccentricity = offOrigin ? Math.Max(0, this.missionProfile.deployEccentricity - KSTSSettings.ToleranceEccentricity) : 0;
             double maxEccentricity = offOrigin ? Math.Min(0.99, this.missionProfile.deployEccentricity + KSTSSettings.ToleranceEccentricity) : 1;
             double defaultEccentricity = offOrigin ? this.missionProfile.deployEccentricity : 0;
-            double minLAN = offOrigin ? this.missionProfile.deployLAN - KSTSSettings.ToleranceInclination : 0;
-            double maxLAN = offOrigin ? this.missionProfile.deployLAN + KSTSSettings.ToleranceInclination : 360;
+            double minLAN = offOrigin ? this.missionProfile.deployLAN - KSTSSettings.ToleranceLAN : 0;
+            double maxLAN = offOrigin ? this.missionProfile.deployLAN + KSTSSettings.ToleranceLAN : 360;
             double defaultLAN = offOrigin ? this.missionProfile.deployLAN : 0;
 
             // Simple orbits:

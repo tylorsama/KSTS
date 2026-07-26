@@ -319,6 +319,21 @@ namespace KSTS
         // Moved here to avoid reinitializing every single loop
         static string[] toolbarStrings = new string[] { "Flights", "Deploy", "Transport", "Construct", "Record", "Help", "Settings" };
 
+        // Applies the configured UI scale (KSTSSettings.UiScale) around the window's top-left corner and returns the
+        // previous GUI matrix. Each window site calls this before GUILayoutWindow and restores it via EndScale.
+        public static Matrix4x4 BeginScale()
+        {
+            var previous = UnityEngine.GUI.matrix;
+            if (KSTSSettings.UiScale != 1.0)
+                GUIUtility.ScaleAroundPivot(Vector2.one * (float)KSTSSettings.UiScale, new Vector2(windowPosition.x, windowPosition.y));
+            return previous;
+        }
+
+        public static void EndScale(Matrix4x4 previous)
+        {
+            UnityEngine.GUI.matrix = previous;
+        }
+
         // Is called by our helper-classes to draw the actual window:
         public static void DrawWindow()
         {

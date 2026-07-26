@@ -11,6 +11,7 @@ namespace KSTS
     {
         private Vector2 scrollPos = Vector2.zero;
         private int selectedIndex = -1;
+        private string nameSearch = "";
         public Vessel targetVessel = null;
 
         public VesselType? filterVesselType = null;
@@ -34,7 +35,12 @@ namespace KSTS
         // Shows a list of all available target-vessels and returns true, if the player has selected one:
         public bool DisplayList()
         {
+            GUILayout.BeginHorizontal();
             GUILayout.Label("<size=14><b>Target:</b></size>");
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("Filter:");
+            nameSearch = GUILayout.TextField(nameSearch, GUILayout.Width(200));
+            GUILayout.EndHorizontal();
             scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
             var green = "#00FF00";
             var red = "#FF0000";
@@ -46,6 +52,14 @@ namespace KSTS
                 if (!TargetVessel.IsValidTarget(vessel)) continue;
                 validTargets.Add(vessel);
             }
+
+            // Filter by the vessel-name search box (covers both target flavours: transport and construction):
+            if (this.nameSearch != "")
+            {
+                string f = nameSearch.ToLower();
+                validTargets = validTargets.Where(v => Localizer.Format(v.vesselName).ToLower().Contains(f)).ToList();
+            }
+
             if (selectedIndex >= validTargets.Count)
             {
                 selectedIndex = -1;
