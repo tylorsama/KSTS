@@ -429,7 +429,7 @@ namespace KSTS
             vessel.id = Guid.NewGuid();
             vessel.vesselName = Localizer.Format(ship.shipName);
             vessel.persistentId = ship.persistentId;
-            vessel.Initialize();
+            vessel.Initialize(true);
             if (orbit != null)
             {
                 var orbitDriver = vessel.gameObject.GetComponent<OrbitDriver>();
@@ -500,36 +500,47 @@ namespace KSTS
             return vessel;
         }
 
-        // Creates a new ship with the given parameters for this mission. The code however seems unnecessarily convoluted and
-        // error-prone, but there are no better examples available on the internet.
+        // Creates a new ship for this mission as an UNLOADED ProtoVessel (pure data added to the flight state),
+        // the same way stock spawns contract/rescue vessels and asteroids. No live Vessel or PartModule.OnStart
+        // runs in the Space Center scene, so none of the "wrong scene" NREs (docking-port rotation, Kerbalism,
+        // CometVessel, SuspensionLoadBalancer) and no terrain-kill can happen. The live parts produced by
+        // ShipConstruction.LoadShip() are only used to snapshot the craft and are destroyed immediately after.
         private void CreateShip()
         {
             try
             {
-                // The ShipConstruct-object can only savely exist while not in flight, otherwise it will spam Null-Pointer Exceptions every tick:
+                // A live ShipConstruct spams NREs every tick in the flight scene, so LoadShip must run outside flight:
                 if (HighLogic.LoadedScene == GameScenes.FLIGHT)
                 {
                     throw new Exception("unable to run CreateShip while in flight");
                 }
 
-                // Load the parts form the saved vessel:
                 if (!File.Exists(shipTemplateFilename))
                 {
                     throw new Exception("file '" + shipTemplateFilename + "' not found");
                 }
 
-                var shipConstruct = ShipConstruction.LoadShip(shipTemplateFilename);
+                Debug.LogWarning(string.Format(
+                    "[KSTS] CreateShip: missionType={0}, shipName='{1}', template='{2}', scene={3}",
+                    missionType, shipName, shipTemplateFilename, HighLogic.LoadedScene));
 
-                // Maybe adjust the orbit:
+                var shipConstruct = ShipConstruction.LoadShip(shipTemplateFilename);
+                if (shipConstruct == null || shipConstruct.parts == null || shipConstruct.parts.Count == 0)
+                {
+                    throw new Exception("LoadShip returned an empty/invalid ShipConstruct for '" + shipTemplateFilename + "'");
+                }
+                Debug.LogWarning(string.Format(
+                    "[KSTS] CreateShip: loaded ShipConstruct '{0}' with {1} parts, size={2}",
+                    shipConstruct.shipName, shipConstruct.parts.Count, shipConstruct.shipSize));
+
+                // Adjust the orbit so the newly created ship does not collide with anything:
                 var vesselHeight = Math.Max(Math.Max(shipConstruct.shipSize.x, shipConstruct.shipSize.y), shipConstruct.shipSize.z);
                 if (missionType == MissionType.DEPLOY)
                 {
-                    // Make sure that there won't be any collisions, when the vessel is created at the given orbit:
                     orbit = GUIOrbitEditor.ApplySafetyDistance(orbit, vesselHeight);
                 }
                 else if (missionType == MissionType.CONSTRUCT)
                 {
-                    // Deploy the new ship next to the space-dock:
                     var spaceDock = TargetVessel.GetVesselById((Guid)targetVesselId);
                     orbit = GUIOrbitEditor.CreateFollowingOrbit(spaceDock.orbit, TargetVessel.GetVesselSize(spaceDock) + vesselHeight);
                     orbit = GUIOrbitEditor.ApplySafetyDistance(orbit, vesselHeight);
@@ -538,29 +549,172 @@ namespace KSTS
                 {
                     throw new Exception("invalid mission-type '" + missionType + "'");
                 }
+                Debug.LogWarning(string.Format(
+                    "[KSTS] CreateShip: target orbit inc={0:F2} ecc={1:F4} sma={2:F0} refbody={3}",
+                    orbit.inclination, orbit.eccentricity, orbit.semiMajorAxis, orbit.referenceBody?.bodyName));
 
                 var game = FlightDriver.FlightStateCache ?? HighLogic.CurrentGame;
                 var profile = GetProfile();
-                var duration = profile.missionDuration;
-                AssembleForLaunchUnlanded(shipConstruct, crewToDeliver ?? Enumerable.Empty<string>(), duration, orbit, flagURL, game);
-                var newVessel = FlightGlobals.Vessels[FlightGlobals.Vessels.Count - 1];
-                newVessel.vesselName = shipName;
-                TrackedVessels.Add(newVessel.id);
-                if (!_addedEvent)
-                {
-                    GameEvents.onVesselLoaded.Add(CheckStaging);
-                    _addedEvent = true;
-                }
-                Log.Warning("deployed new ship '" + shipName + "' as '" + newVessel.protoVessel.vesselRef.id + "'");
-                ScreenMessages.PostScreenMessage("Vessel '" + shipName + "' deployed"); // Popup message to notify the player
+                var duration = profile != null ? profile.missionDuration : 0.0;
 
-                // Notify other mods about the new vessel:
-                GameEvents.onVesselCreate.Fire(newVessel);
+                var protoVessel = SpawnProtoVessel(shipConstruct, crewToDeliver ?? Enumerable.Empty<string>(), duration, orbit, flagURL, game);
+                if (protoVessel == null)
+                {
+                    throw new Exception("SpawnProtoVessel returned null");
+                }
+
+                Log.Warning("deployed new ship '" + shipName + "' as '" + protoVessel.vesselID + "'");
+                Debug.LogWarning(string.Format(
+                    "[KSTS] CreateShip: done. vesselID={0}, vesselRef={1}, protoPartSnapshots={2}",
+                    protoVessel.vesselID,
+                    protoVessel.vesselRef != null ? "present" : "null",
+                    protoVessel.protoPartSnapshots != null ? protoVessel.protoPartSnapshots.Count.ToString() : "null"));
+                ScreenMessages.PostScreenMessage("Vessel '" + shipName + "' deployed");
             }
             catch (Exception e)
             {
                 Debug.LogError("Mission.CreateShip(): " + e);
             }
+        }
+
+        // Builds an unloaded ProtoVessel from a ShipConstruct and registers it in the flight state.
+        // Returns the created ProtoVessel, or null on failure.
+        //
+        // NOTE on life support:
+        //  * Kerbalism: needs no special "prep". Its LS resources (Food/Water/Oxygen/...) live in the part
+        //    configs, so they are captured automatically by the ProtoPartSnapshots below. Kerbalism registers
+        //    the vessel via GameEvents.onNewVesselCreated (fired by Game.AddVessel) and creates its VesselData
+        //    lazily on first access. Nothing to do here for Kerbalism.
+        //  * USI Life Support: keeps a separate per-kerbal database, so LifeSupportWrapper.PrepForLaunch must be
+        //    called. It only needs a Vessel with a valid .id - after AddVessel that is protoVessel.vesselRef.
+        private ProtoVessel SpawnProtoVessel(ShipConstruct ship, IEnumerable<string> crewToDeliver, double duration, Orbit orbit,
+                                             string flagUrl, Game sceneState)
+        {
+            var localRoot = ship.parts[0].localRoot;
+
+            // 1) Give every part a fresh flight identity, exactly like ShipConstruction.AssembleForLaunch does.
+            //    This must happen before we snapshot the parts.
+            var missionId = (uint)Guid.NewGuid().GetHashCode();
+            var launchId = HighLogic.CurrentGame.launchID++;
+            foreach (var part in ship.parts)
+            {
+                part.flightID = ShipConstruction.GetUniqueFlightID(sceneState.flightState);
+                part.missionID = missionId;
+                part.launchID = launchId;
+                part.flagURL = flagUrl ?? string.Empty;
+            }
+
+            // 2) Resolve and seat the crew into the live parts BEFORE snapshotting (Part.AddCrewmember populates
+            //    part.protoModuleCrew, which ProtoPartSnapshot captures). We use the roster directly.
+            var pCrewMembers = CrewRoster().Where(k => k != null && crewToDeliver.Contains(k.name)).ToList();
+            var seatedCrew = new List<ProtoCrewMember>();
+            foreach (var kerbal in pCrewMembers)
+            {
+                var toP = ship.parts.Find(p => p.CrewCapacity > p.protoModuleCrew.Count);
+                if (toP == null)
+                {
+                    Debug.LogWarning("[KSTS] SpawnProtoVessel: no free seat left for crew member '" + kerbal.name + "', skipping");
+                    break;
+                }
+                toP.AddCrewmember(kerbal);
+                // Mark as Assigned immediately so the kerbal is not left "Available" in the roster while also
+                // being part of a registered vessel (that would duplicate them in the Astronaut Complex).
+                kerbal.rosterStatus = ProtoCrewMember.RosterStatus.Assigned;
+                seatedCrew.Add(kerbal);
+                Debug.LogWarning(string.Format("[KSTS] SpawnProtoVessel: seated '{0}' into part '{1}'", kerbal.name, toP.name));
+            }
+
+            // 3) Determine the vessel type (highest wins, like Vessel.FindDefaultVesselType) and the root index.
+            var vesselType = VesselType.Probe;
+            foreach (var part in ship.parts)
+            {
+                if (part.vesselType > vesselType) vesselType = part.vesselType;
+            }
+            var rootIndex = ship.parts.IndexOf(localRoot);
+            if (rootIndex < 0) rootIndex = 0;
+
+            // 4) Create an empty ProtoVessel "skeleton" (name/type/orbit/pid, no parts yet). We need a real
+            //    ProtoVessel BEFORE snapshotting because ProtoPartSnapshot(Part, pv) calls pv.AddCrew() for every
+            //    seated kerbal - passing null there NREs on crewed parts.
+            var skeletonNode = ProtoVessel.CreateVesselNode(shipName, vesselType, orbit, rootIndex, new ConfigNode[0]);
+            var protoVesselBulider = new ProtoVessel(skeletonNode, HighLogic.CurrentGame);
+            Debug.LogWarning(string.Format(
+                "[KSTS] SpawnProtoVessel: created ProtoVessel skeleton name='{0}', type={1}, sit={2}, vesselID={3}, rootIndex={4}",
+                protoVesselBulider.vesselName, protoVesselBulider.vesselType, protoVesselBulider.situation, protoVesselBulider.vesselID, rootIndex));
+
+            // 5) Snapshot every live part INTO this ProtoVessel. This captures the craft's actual state
+            //    (resources incl. Kerbalism LS, module states, and the crew we just seated). Then storePartRefs()
+            //    records parent/attach-node/symmetry connectivity - exactly what the stock ProtoVessel(Vessel)
+            //    constructor does. Without storePartRefs the parts would all be parent=0 with no joints.
+            foreach (var part in ship.parts)
+            {
+                protoVesselBulider.protoPartSnapshots.Add(new ProtoPartSnapshot(part, protoVesselBulider));
+            }
+
+            // storePartRefs() -> AttachNodeSnapshot(node, protoVessel) resolves each attached part's index via
+            // protoVessel.vesselRef.parts. Our skeleton has no vesselRef yet (Load() creates it), so it would NRE the
+            // moment a part has an attached neighbour. Give it a throwaway parts-container Vessel for the duration of
+            // snapshotting: partIdx is then computed as the index in ship.parts, which matches the order in which we
+            // added protoPartSnapshots (and the rootIndex we computed). We use a plain managed `new Vessel()` on
+            // purpose - it never runs Awake/OnDestroy/coroutines, so it cannot touch or destroy our live parts.
+            // (Unity logs one harmless "created MonoBehaviour with new" line for it.)
+            var refHolder = new Vessel { parts = ship.parts };
+            protoVesselBulider.vesselRef = refHolder;
+            foreach (var snapshot in protoVesselBulider.protoPartSnapshots)
+            {
+                snapshot.storePartRefs();
+            }
+            protoVesselBulider.vesselRef = null;
+            Debug.LogWarning(string.Format(
+                "[KSTS] SpawnProtoVessel: snapshotted {0} parts, protoVessel crew={1}, crewedParts={2}",
+                protoVesselBulider.protoPartSnapshots.Count, protoVesselBulider.GetVesselCrew().Count, protoVesselBulider.crewedParts));
+
+            // 6) Register the ProtoVessel in the flight state and Load it as an UNLOADED vessel.
+            //  
+            var partNodes = protoVesselBulider.protoPartSnapshots.Select(s => { var n = new ConfigNode("PART"); s.Save(n); return n; }).ToArray();
+            var vesselNode = ProtoVessel.CreateVesselNode(shipName, vesselType, orbit, rootIndex, partNodes);
+            var protoVessel = HighLogic.CurrentGame.AddVessel(vesselNode);
+
+            // 7) Give the delivered crew a plausible flight log, like the old code did (rosterStatus was already
+            //    set to Assigned when they were seated, above).
+            if (seatedCrew.Count > 0)
+            {
+                var homeBody = Planetarium.fetch.Home;
+                foreach (var pcm in seatedCrew)
+                {
+                    pcm.flightLog.AddEntry(FlightLog.EntryType.Launch, homeBody.bodyName);
+                    pcm.flightLog.AddEntry(FlightLog.EntryType.Flight, homeBody.bodyName);
+                    pcm.flightLog.AddEntry(FlightLog.EntryType.Suborbit, homeBody.bodyName);
+                    pcm.flightLog.AddEntry(FlightLog.EntryType.Orbit, homeBody.bodyName);
+                    if (orbit.referenceBody != homeBody)
+                    {
+                        pcm.flightLog.AddEntry(FlightLog.EntryType.Escape, homeBody.bodyName);
+                        pcm.flightLog.AddEntry(FlightLog.EntryType.Orbit, orbit.referenceBody.bodyName);
+                    }
+                }
+            }
+
+            // 8) USI Life Support prep (Kerbalism needs nothing here - see method note). Uses the unloaded
+            //    vesselRef only for its id; safe to skip if USI is absent or vesselRef is null.
+            if (protoVessel != null && protoVessel.vesselRef != null && seatedCrew.Count > 0)
+            {
+                LifeSupportWrapper.Instance.PrepForLaunch(protoVessel.vesselRef, seatedCrew, duration);
+            }
+
+            // 9) Destroy the temporary live parts created by LoadShip(). They were never attached to a real Vessel;
+            //    leaving them alive is exactly what caused the orphaned-part / OnStart / terrain-kill NREs.
+            var destroyed = 0;
+            foreach (var part in ship.parts)
+            {
+                if (part != null && part.gameObject != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(part.gameObject);
+                    destroyed++;
+                }
+            }
+            Debug.LogWarning("[KSTS] SpawnProtoVessel: destroyed " + destroyed + " temporary live parts");
+
+            return protoVessel;
         }
 
         private static readonly HashSet<Guid> TrackedVessels = new HashSet<Guid>();
