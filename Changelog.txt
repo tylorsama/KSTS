@@ -2,8 +2,8 @@ ChangeLog
 X.X.X - [correct version number should be added after merge]
         Feature added - Kerbalism support:
         - Payload vessels in Deploy mission will be drained on Food/Water/etc upon arrival
-        - Recyclers and Greenhouses are not counted, only static supplies 
         - Due Kerbalism API limitations it is not possible to precalculate drain before the mission starts, only when vessel is open in tracking station (and Kerbalism stuff is initialised)
+    	- For the same reason Recyclers and Greenhouses are not counted, only static supplies 
         - For Transport missions with crew the recorder will check, if player managed to deliver Kerbals alive to target before saving record.  
         Feature added - Crew rotation Transport missions - you can deliver AND take kerbals from station during one mission
         Feature added - Refueling on destination vessel for Transport mission.  Used fuel will be substracted from station tanks
