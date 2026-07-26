@@ -269,6 +269,7 @@ namespace KSTS
         public double launchMass = 0;
 
         public string launchBodyName = "";
+        public string destinationBodyName = "";
         public double minAltitude = 0;
         public double maxAltitude = 0;
         public double payloadMass = 0;
@@ -293,6 +294,7 @@ namespace KSTS
 
             // Save the minimum altitude we need for a stable orbit as well as the launch-body's name:
             launchBodyName = vessel.mainBody.bodyName;
+            destinationBodyName = launchBodyName;
             FloatCurve pressureCurve = vessel.mainBody.atmospherePressureCurve;
             if(pressureCurve.Curve.length == 0) {
                 minAltitude = 1; // if there's no atmosphere, theoretically we could orbit at 1m
@@ -332,9 +334,11 @@ namespace KSTS
             // When in orbit, set the maximum altitude for future missions:
             if (this.status == FlightRecordingStatus.ASCENDING)
             {
-                if (vessel.situation == Vessel.Situations.ORBITING && vessel.orbit.referenceBody.bodyName == launchBodyName)
+                if (vessel.situation == Vessel.Situations.ORBITING)
                 {
                     this.maxAltitude = vessel.orbit.PeA; // Current periapsis
+                    destinationBodyName = vessel.orbit.referenceBody.bodyName;
+                    //TODO логирование
                 }
                 else
                 {

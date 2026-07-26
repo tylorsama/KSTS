@@ -810,7 +810,7 @@ namespace KSTS
         public double payloadMass = 0;
         public double minAltitude = 0;
         public double maxAltitude = 0;
-        public string bodyName = "";
+        public string destinationBodyName = "";
         public double missionDuration = 0;
         public bool oneWayMission = true;
         public int crewCapacity = 0;
@@ -849,7 +849,7 @@ namespace KSTS
             profile.payloadMass = recording.payloadMass;
             profile.minAltitude = recording.minAltitude;
             profile.maxAltitude = recording.maxAltitude;
-            profile.bodyName = recording.launchBodyName;
+            profile.destinationBodyName = recording.destinationBodyName;
             profile.missionDuration = recording.deploymentTime - recording.startTime;
             profile.crewCapacity = vessel.GetCrewCapacity() - vessel.GetCrewCount(); // Capacity at the end of the mission, so we can use it for oneway- as well als return-trips.
             profile.dockingPortTypes = recording.dockingPortTypes;

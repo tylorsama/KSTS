@@ -190,10 +190,10 @@ namespace KSTS
                     description += "<b>Payload:</b> " + payloadMass;
 
                     // Body:
-                    var bodyName = missionProfile.bodyName;
+                    var bodyName = missionProfile.destinationBodyName;
                     if (this.filterBody != null)
                     {
-                        if (this.filterBody.bodyName != missionProfile.bodyName) { isValidProfile = false; color = red; }
+                        if (this.filterBody.bodyName != missionProfile.destinationBodyName) { isValidProfile = false; color = red; }
                         else color = green;
                         bodyName = "<color=" + color + ">" + bodyName + "</color>";
                     }

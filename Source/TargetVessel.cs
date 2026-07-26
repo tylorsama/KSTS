@@ -37,7 +37,7 @@ namespace KSTS
             } 
             else 
             {
-                if (vessel.orbit.referenceBody.bodyName != profile.bodyName) return false; // Can only record orbits around the same body as the profile
+                if (vessel.orbit.referenceBody.bodyName != profile.destinationBodyName) return false; // Can only record orbits around the same body as the profile
 
                 bool hasMatchingPort = false;
                 foreach (string dockingPortType in dockingPortTypes)

@@ -23,7 +23,7 @@ namespace KSTS
 
         public GUIOrbitEditor(MissionProfile missionProfile)
         {
-            this.body = FlightGlobals.GetBodyByName(missionProfile.bodyName);
+            this.body = FlightGlobals.GetBodyByName(missionProfile.destinationBodyName);
             if(this.body == null) { // in case this flight was registered on a now-invalid body
                 this.body = FlightGlobals.GetHomeBody();
             }
