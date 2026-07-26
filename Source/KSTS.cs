@@ -168,6 +168,9 @@ namespace KSTS
                 if (KSTS.initialized) return;
                 DontDestroyOnLoad(this);
                 KSTS.initialized = true;
+
+                // Load mod-wide tuning values from settings.cfg (once per session):
+                KSTSSettings.Load();
             }
             catch (Exception e)
             {

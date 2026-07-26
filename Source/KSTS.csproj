@@ -85,8 +85,10 @@
     <Compile Include="InstallChecker.cs" />
     <Compile Include="KACWrapper.cs" />
     <Compile Include="KSTS.cs" />
+    <Compile Include="KSTSSettings.cs" />
     <Compile Include="FlightRecorder.cs" />
     <Compile Include="GUI.cs" />
+    <Compile Include="KSTSSettings.cs" />
     <Compile Include="LifeSupportWrapper.cs" />
     <Compile Include="MissionController.cs" />
     <Compile Include="OrbitEditor.cs" />
