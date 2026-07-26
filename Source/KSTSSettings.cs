@@ -13,6 +13,10 @@ namespace KSTS
         // Deploy-altitude ceiling is capped this many meters below the destination body's SoI edge:
         public static double CeilingSoiMargin = 1000;        // meters
 
+        // A payload part counts as "used" only if a massed resource drained more than this fraction of its
+        // capacity during the recording (keeps slow life-support drain of empty crew pods from disqualifying them):
+        public static double UsedPartResourceThreshold = 0.01;  // fraction of capacity (0.01 = 1%)
+
         public static void Load()
         {
             var node = GameDatabase.Instance.GetConfigNodes("KSTS_SETTINGS").FirstOrDefault();
@@ -20,6 +24,7 @@ namespace KSTS
             if (node.HasValue("toleranceInclination")) ToleranceInclination = double.Parse(node.GetValue("toleranceInclination"));
             if (node.HasValue("toleranceEccentricity")) ToleranceEccentricity = double.Parse(node.GetValue("toleranceEccentricity"));
             if (node.HasValue("ceilingSoiMargin")) CeilingSoiMargin = double.Parse(node.GetValue("ceilingSoiMargin"));
+            if (node.HasValue("usedPartResourceThreshold")) UsedPartResourceThreshold = double.Parse(node.GetValue("usedPartResourceThreshold"));
         }
     }
 }

@@ -810,11 +810,23 @@ namespace KSTS
         public double payloadMass = 0;
         public double minAltitude = 0;
         public double maxAltitude = 0;
+        public string launchBodyName = "";
         public string destinationBodyName = "";
+        public double deployInclination = 0;
+        public double deployEccentricity  = 0;
+        public double deployLAN = 0;
         public double missionDuration = 0;
         public bool oneWayMission = true;
         public int crewCapacity = 0;
         public List<string> dockingPortTypes = null;
+
+        // True when the payload was delivered to a body other than the one the rocket launched from.
+        // Such profiles constrain the deploy-orbit (see GUIOrbitEditor / GUIMissionProfileSelector),
+        // because a plane- or altitude-change at the destination was not demonstrated on the recording.
+        public bool IsForeignBodyDelivery()
+        {
+            return !string.IsNullOrEmpty(launchBodyName) && destinationBodyName != launchBodyName;
+        }
 
         public static string GetMissionProfileTypeName(MissionProfileType type)
         {
@@ -850,6 +862,10 @@ namespace KSTS
             profile.minAltitude = recording.minAltitude;
             profile.maxAltitude = recording.maxAltitude;
             profile.destinationBodyName = recording.destinationBodyName;
+            profile.launchBodyName = recording.launchBodyName;
+            profile.deployInclination = recording.deployInclination;
+            profile.deployEccentricity = recording.deployEccentricity;
+            profile.deployLAN = recording.deployLAN;
             profile.missionDuration = recording.deploymentTime - recording.startTime;
             profile.crewCapacity = vessel.GetCrewCapacity() - vessel.GetCrewCount(); // Capacity at the end of the mission, so we can use it for oneway- as well als return-trips.
             profile.dockingPortTypes = recording.dockingPortTypes;

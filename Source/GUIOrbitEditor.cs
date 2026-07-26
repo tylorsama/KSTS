@@ -33,14 +33,37 @@ namespace KSTS
 
         public void Reset()
         {
+            // For deliveries to a body other than the launch body the demonstrated orbit becomes a floor:
+            // altitude can only go up (to just below the SoI), and inclination/eccentricity are limited to a
+            // tolerance band around the recorded values (a plane- or shape-change was not demonstrated).
+            var offOrigin = this.missionProfile.IsForeignBodyDelivery();
+            double floorAltitude = offOrigin ? this.missionProfile.maxAltitude : this.missionProfile.minAltitude;
+            double ceilingAltitude = this.missionProfile.maxAltitude;
+            if (offOrigin)
+            {
+                ceilingAltitude = this.body.sphereOfInfluence - KSTSSettings.CeilingSoiMargin - this.body.Radius;
+                if (ceilingAltitude < floorAltitude) ceilingAltitude = floorAltitude; // Keep the range non-empty for tiny SoIs.
+            }
+            double defaultAltitude = offOrigin ? floorAltitude : ceilingAltitude;
+
+            double minInclination = offOrigin ? this.missionProfile.deployInclination - KSTSSettings.ToleranceInclination : -180;
+            double maxInclination = offOrigin ? this.missionProfile.deployInclination + KSTSSettings.ToleranceInclination : 180;
+            double defaultInclination = offOrigin ? this.missionProfile.deployInclination : 0;
+            double minEccentricity = offOrigin ? Math.Max(0, this.missionProfile.deployEccentricity - KSTSSettings.ToleranceEccentricity) : 0;
+            double maxEccentricity = offOrigin ? Math.Min(0.99, this.missionProfile.deployEccentricity + KSTSSettings.ToleranceEccentricity) : 1;
+            double defaultEccentricity = offOrigin ? this.missionProfile.deployEccentricity : 0;
+            double minLAN = offOrigin ? this.missionProfile.deployLAN - KSTSSettings.ToleranceInclination : 0;
+            double maxLAN = offOrigin ? this.missionProfile.deployLAN + KSTSSettings.ToleranceInclination : 360;
+            double defaultLAN = offOrigin ? this.missionProfile.deployLAN : 0;
+
             // Simple orbits:
-            altitudeSelector = new GUIRichValueSelector("Altitude", Math.Floor(this.missionProfile.maxAltitude), "m", Math.Ceiling(this.missionProfile.minAltitude), Math.Floor(this.missionProfile.maxAltitude), true, "#,##0");
-            inclinationSelector = new GUIRichValueSelector("Inclination", 0, "°", -180, 180, true, "+0.000;-0.000");
+            altitudeSelector = new GUIRichValueSelector("Altitude", Math.Floor(defaultAltitude), "m", Math.Ceiling(floorAltitude), Math.Floor(ceilingAltitude), true, "#,##0");
+            inclinationSelector = new GUIRichValueSelector("Inclination", defaultInclination, "°", minInclination, maxInclination, true, "+0.000;-0.000");
 
             // Additional settings for complex orbits:
-            eccentricitySelector = new GUIRichValueSelector("Eccentricity", 0, "", 0, 1, true, "0.000");
-            semiMajorAxisSelector = new GUIRichValueSelector("SMA", Math.Floor(body.Radius + this.missionProfile.maxAltitude), "m", Math.Ceiling(body.Radius + this.missionProfile.minAltitude), Math.Floor(body.Radius + this.missionProfile.maxAltitude), true, "#,##0.0");
-            longitudeOfAscendingNodeSelector = new GUIRichValueSelector("LAN", 0, "°", 0, 360, true, "0.000");
+            eccentricitySelector = new GUIRichValueSelector("Eccentricity", defaultEccentricity, "", minEccentricity, maxEccentricity, true, "0.000");
+            semiMajorAxisSelector = new GUIRichValueSelector("SMA", Math.Floor(body.Radius + defaultAltitude), "m", Math.Ceiling(body.Radius + floorAltitude), Math.Floor(body.Radius + ceilingAltitude), true, "#,##0.0");
+            longitudeOfAscendingNodeSelector = new GUIRichValueSelector("LAN", defaultLAN, "°", minLAN, maxLAN, true, "0.000");
             argumentOfPeriapsisSelector = new GUIRichValueSelector("AOP", 0, "°", 0, 360, true, "0.000");
             meanAnomalyAtEpochSelector = new GUIRichValueSelector("MAE", 0, "° rad", -Math.PI, Math.PI, true, "0.000");
             showReferenceVessels = false;
@@ -126,7 +149,11 @@ namespace KSTS
             switch (selectedEditorTab)
             {
                 case 0: // Simple Editpor:
-                    return CreateSimpleOrbit(this.body, altitudeSelector.Value, inclinationSelector.Value);
+                {
+                    // Off-origin deliveries must keep the recorded orbital plane, so pin the ascending node too:
+                    var simpleLAN = this.missionProfile.IsForeignBodyDelivery() ? this.missionProfile.deployLAN : 0;
+                    return CreateSimpleOrbit(this.body, altitudeSelector.Value, inclinationSelector.Value, simpleLAN);
+                }
 
                 case 1: // Complex Editor:
                     // Not sure if we should set an epoch when coying over orbital-values from a reference vessel, but it's probably fine to leave it.
@@ -137,9 +164,9 @@ namespace KSTS
             }
         }
 
-        public static Orbit CreateSimpleOrbit(CelestialBody body, double altitude, double inclination)
+        public static Orbit CreateSimpleOrbit(CelestialBody body, double altitude, double inclination, double longitudeOfAscendingNode = 0)
         {
-            return GUIOrbitEditor.CreateOrbit(inclination, 0, altitude + body.Radius, 0, 0, 0, 0, body);
+            return GUIOrbitEditor.CreateOrbit(inclination, 0, altitude + body.Radius, longitudeOfAscendingNode, 0, 0, 0, body);
         }
 
         public static Orbit CreateOrbit(double inclination, double eccentricity, double semiMajorAxis, double longitudeOfAscendingNode, double argumentOfPeriapsis, double meanAnomalyAtEpoch, double epoch, CelestialBody body)

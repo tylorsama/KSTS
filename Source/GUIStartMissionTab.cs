@@ -178,6 +178,10 @@ namespace KSTS
                 missionProfileSelector.filterBody = targetVesselSelector.targetVessel.orbit.referenceBody;
                 missionProfileSelector.filterDockingPortTypes = TargetVessel.GetVesselDockingPortTypes(targetVesselSelector.targetVessel);
                 missionProfileSelector.filterMissionType = MissionProfileType.TRANSPORT;
+                missionProfileSelector.filterPeriapsis = targetVesselSelector.targetVessel.orbit.PeA;
+                missionProfileSelector.filterInclination = targetVesselSelector.targetVessel.orbit.inclination;
+                missionProfileSelector.filterEccentricity = targetVesselSelector.targetVessel.orbit.eccentricity;
+                missionProfileSelector.filterLAN = targetVesselSelector.targetVessel.orbit.LAN;
             }
             if (missionProfileSelector.selectedProfile == null)
             {
@@ -307,6 +311,10 @@ namespace KSTS
                 missionProfileSelector.filterBody = targetVesselSelector.targetVessel.orbit.referenceBody;
                 missionProfileSelector.filterDockingPortTypes = TargetVessel.GetVesselDockingPortTypes(targetVesselSelector.targetVessel);
                 missionProfileSelector.filterMissionType = MissionProfileType.TRANSPORT;
+                missionProfileSelector.filterPeriapsis = targetVesselSelector.targetVessel.orbit.PeA;
+                missionProfileSelector.filterInclination = targetVesselSelector.targetVessel.orbit.inclination;
+                missionProfileSelector.filterEccentricity = targetVesselSelector.targetVessel.orbit.eccentricity;
+                missionProfileSelector.filterLAN = targetVesselSelector.targetVessel.orbit.LAN;
                 shipName = payloadShipSelector.payload.template.shipName;
             }
             if (missionProfileSelector.selectedProfile == null)

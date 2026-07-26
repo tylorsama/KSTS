@@ -273,6 +273,10 @@ namespace KSTS
         public double minAltitude = 0;
         public double maxAltitude = 0;
         public double payloadMass = 0;
+        //for mission with destinationBodyName!=launchBodyName
+        public double deployInclination = 0;
+        public double deployEccentricity  = 0;
+        public double deployLAN = 0;
 
         public bool mustReturn = false;
 
@@ -336,9 +340,12 @@ namespace KSTS
             {
                 if (vessel.situation == Vessel.Situations.ORBITING)
                 {
-                    this.maxAltitude = vessel.orbit.PeA; // Current periapsis
+                    this.maxAltitude = vessel.orbit.ApA; // Current apoapsis
                     destinationBodyName = vessel.orbit.referenceBody.bodyName;
-                    //TODO логирование
+                    deployInclination = vessel.orbit.inclination;
+                    deployEccentricity = vessel.orbit.eccentricity;
+                    deployLAN = vessel.orbit.LAN;
+                    
                 }
                 else
                 {
@@ -377,16 +384,17 @@ namespace KSTS
         {
             if (this.status != FlightRecordingStatus.DESCENDING) return false;
             if (this.payloadMass <= 0) return false;
-            if (this.vessel.mainBody.bodyName != this.launchBodyName) return false;
             if (this.mustReturn)
             {
-                // The vessel must have landed on the planet from where it came:
+                // Return missions (crewed) must fly back and land on the body they launched from:
+                if (this.vessel.mainBody.bodyName != this.launchBodyName) return false;
                 if (this.vessel.situation == Vessel.Situations.LANDED || this.vessel.situation == Vessel.Situations.SPLASHED) return true;
                 return false;
             }
             else
             {
-                // All conditions met for one-way mission:
+                // One-way mission: the payload is already released, so the recording can be saved right here —
+                // including deliveries to another body, with no need to return to the launch body.
                 return true;
             }
         }
@@ -516,7 +524,16 @@ namespace KSTS
                     this.launchMass.ToString("#,##0.00 t")
                 ));
 
-                list.Add(new KeyValuePair<string, string>("Body", this.launchBodyName));
+                list.Add(new KeyValuePair<string, string>("Launch Body", this.launchBodyName));
+                list.Add(new KeyValuePair<string, string>("Destination Body", string.IsNullOrEmpty(this.destinationBodyName) ? "-" : this.destinationBodyName));
+
+                // For off-origin deliveries the recorded orbit plane/shape is what a deploy must match, so surface it:
+                if (!string.IsNullOrEmpty(this.destinationBodyName) && this.destinationBodyName != this.launchBodyName)
+                {
+                    list.Add(new KeyValuePair<string, string>("Inclination", this.deployInclination.ToString("0.0") + " °"));
+                    list.Add(new KeyValuePair<string, string>("Eccentricity", this.deployEccentricity.ToString("0.000")));
+                    list.Add(new KeyValuePair<string, string>("Asc. node (LAN)", this.deployLAN.ToString("0.0") + " °"));
+                }
 
                 if (this.maxAltitude > 0)
                 {
@@ -751,16 +768,17 @@ namespace KSTS
                 {
                     if (recording.usedPartIds.Contains(part.flightID.ToString())) continue; // Already blocked
                     var blockThis = false;
+                    var blockReason = "";
                     var partId = part.flightID.ToString();
 
                     // Check for running engines:
                     foreach (var engineModule in part.FindModulesImplementing<ModuleEngines>())
                     {
-                        if (engineModule.GetCurrentThrust() > 0) blockThis = true;
+                        if (engineModule.GetCurrentThrust() > 0) { blockThis = true; blockReason = "engine thrust"; }
                     }
                     foreach (var engineModule in part.FindModulesImplementing<ModuleEnginesFX>())
                     {
-                        if (engineModule.GetCurrentThrust() > 0) blockThis = true;
+                        if (engineModule.GetCurrentThrust() > 0) { blockThis = true; blockReason = "engine thrust (FX)"; }
                     }
 
                     // Check for resource-consumption:
@@ -779,13 +797,21 @@ namespace KSTS
                         }
                         else
                         {
-                            if (lastAmount != resource.amount) blockThis = true; // The amount has changed relative to the last timer-tick.
+                            // Ignore tiny drains (<1% of capacity): life-support mods like Kerbalism slowly consume
+                            // supplies (nitrogen, oxygen, ...) even from EMPTY crew pods by default(pressurte control can be disabled manually)
+                            //  which would otherwise wrongly // mark such a pod as "used". "lastAmount" is the baseline, so "consumed" is the total drain.
+                            var consumed = Math.Abs(lastAmount - resource.amount);
+                            if (resource.maxAmount > 0 && consumed > KSTSSettings.UsedPartResourceThreshold * resource.maxAmount)
+                            {
+                                blockThis = true;
+                                blockReason = "resource '" + resourceId + "' changed " + lastAmount + " -> " + resource.amount + " (" + (consumed / resource.maxAmount * 100).ToString("0.0") + "% of capacity)";
+                            }
                         }
                     }
 
                     if (blockThis)
                     {
-                        Log.Warning("marking part " + part.name.ToString() + " (" + part.flightID.ToString() + ") as used");
+                        Log.Warning("[KSTS] payload part marked USED: " + part.name.ToString() + " (id " + part.flightID.ToString() + ") — reason: " + blockReason);
                         recording.usedPartIds.Add(part.flightID.ToString());
                     }
                 }

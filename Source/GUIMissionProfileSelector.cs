@@ -23,6 +23,10 @@ namespace KSTS
         public List<string> filterDockingPortTypes = null;
         public CelestialBody filterBody = null;
         public MissionProfileType? filterMissionType = null;
+        public double? filterPeriapsis = null;    // target periapsis, for off-origin "recorded orbit or higher" check
+        public double? filterInclination = null;  // target inclination, for the off-origin tolerance band
+        public double? filterEccentricity = null; // target eccentricity, for the off-origin tolerance band
+        public double? filterLAN = null;          // target longitude of ascending node, for the off-origin tolerance band
 
         // Makes sure that the cached settings are still valid (eg if the player has deleted the selected profile):
         private void CheckInternals()
@@ -42,7 +46,11 @@ namespace KSTS
                 || filterRoundTrip != null
                 || filterDockingPortTypes != null
                 || filterBody != null
-                || filterMissionType != null;
+                || filterMissionType != null
+                || filterPeriapsis != null
+                || filterInclination != null
+                || filterEccentricity != null
+                || filterLAN != null;
         }
 
         // Displays the currently selected mission-profile and returns true, if the player has deselected the profile:
@@ -203,11 +211,52 @@ namespace KSTS
                     var maxAltitude = GUI.FormatAltitude(missionProfile.maxAltitude);
                     if (this.filterAltitude != null)
                     {
-                        if (this.filterAltitude > missionProfile.maxAltitude) { isValidProfile = false; color = red; }
-                        else color = green;
+                        if (missionProfile.IsForeignBodyDelivery())
+                        {
+                            // Off-origin delivery: the target must be on the recorded orbit or higher (by periapsis).
+                            if (this.filterPeriapsis != null && this.filterPeriapsis < missionProfile.maxAltitude) { isValidProfile = false; color = red; }
+                            else color = green;
+                        }
+                        else
+                        {
+                            if (this.filterAltitude > missionProfile.maxAltitude) { isValidProfile = false; color = red; }
+                            else color = green;
+                        }
                         maxAltitude = "<color=" + color + ">" + maxAltitude + "</color>";
                     }
                     description += " @ " + maxAltitude + "\n";
+
+                    // Off-origin orbit tolerance: inclination, eccentricity and ascending node must stay near the
+                    // recorded values, because a plane- or shape-change at the destination was not demonstrated.
+                    // The values are rendered and coloured so the player sees WHY an out-of-plane target is rejected.
+                    if (missionProfile.IsForeignBodyDelivery())
+                    {
+                        var inclination = missionProfile.deployInclination.ToString("0.0") + "°";
+                        if (this.filterInclination != null)
+                        {
+                            if (Math.Abs((double)this.filterInclination - missionProfile.deployInclination) > KSTSSettings.ToleranceInclination) { isValidProfile = false; color = red; }
+                            else color = green;
+                            inclination = "<color=" + color + ">" + inclination + "</color>";
+                        }
+
+                        var eccentricity = missionProfile.deployEccentricity.ToString("0.000");
+                        if (this.filterEccentricity != null)
+                        {
+                            if (Math.Abs((double)this.filterEccentricity - missionProfile.deployEccentricity) > KSTSSettings.ToleranceEccentricity) { isValidProfile = false; color = red; }
+                            else color = green;
+                            eccentricity = "<color=" + color + ">" + eccentricity + "</color>";
+                        }
+
+                        var lan = missionProfile.deployLAN.ToString("0.0") + "°";
+                        if (this.filterLAN != null)
+                        {
+                            if (Math.Abs((double)this.filterLAN - missionProfile.deployLAN) > KSTSSettings.ToleranceInclination) { isValidProfile = false; color = red; }
+                            else color = green;
+                            lan = "<color=" + color + ">" + lan + "</color>";
+                        }
+
+                        description += "<b>Orbit:</b> incl " + inclination + ", ecc " + eccentricity + ", LAN " + lan + "\n";
+                    }
 
                     // Crew-Capacity:
                     var crewCapacity = missionProfile.crewCapacity.ToString("0");
