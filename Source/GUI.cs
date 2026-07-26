@@ -266,6 +266,19 @@ namespace KSTS
                                 Log.Info("Missing Thumbfile: " + thumbFile);
                                 ShipConstruct ship = ShipConstruction.LoadShip(craftFile);
                                 ThumbnailHelper.CaptureThumbnail(ship, 256, "thumbs/", HighLogic.SaveFolder + "_" + editorFacility + "_" + validFileName);
+
+                                // ShipConstruction.LoadShip() instantiates live Part/PartModule GameObjects outside of the
+                                // editor that are never attached to a Vessel. So without this they stay alive forever with
+                                // vessel == null, and every attached PartModule that calls vessel.KerbalismData() (e.g.
+                                // Kerbalism's Reliability/Experiment) throws a NullReferenceException on every FixedUpdate.
+                                if (ship != null)
+                                {
+                                    foreach (var p in ship.parts)
+                                    {
+                                        if (p != null && p.gameObject != null)
+                                            UnityEngine.Object.DestroyImmediate(p.gameObject);
+                                    }
+                                }
                             }
                         }
 
