@@ -215,10 +215,32 @@ namespace KSTS
             return false;
         }
 
+        // Shows refuel demand vs target availability, blocks launch on shortfall.
+        // Multi-station recordings: all resources taken from THIS single target.
+        private static bool DisplayRefuelCheck()
+        {
+            var profile = missionProfileSelector.selectedProfile;
+            var target = targetVesselSelector.targetVessel;
+            if (profile.refueledResources == null || profile.refueledResources.Count == 0) return true;
+
+            GUILayout.Label("<b>Fuel taken from target station:</b>");
+            var ok = true;
+            foreach (var kv in profile.refueledResources)
+            {
+                var need = kv.Value;
+                var have = TargetVessel.GetResourceAmount(target, kv.Key);
+                var color = have >= need ? "#FFFFFF" : "#FF0000";
+                GUILayout.Label($"  {kv.Key}: <color={color}>{need:0.##} needed / {have:0.##} available</color>");
+                if (have < need) ok = false;
+            }
+            return ok;
+        }
+
         public static bool Display()
         {
             currentCost = 0;
             var ready = DisplayInner();
+            if (ready) ready = DisplayRefuelCheck();
             var launch = DisplayFooter(currentCost, ready);
             if (launch)
             {

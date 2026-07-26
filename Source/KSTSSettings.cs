@@ -21,6 +21,10 @@ namespace KSTS
         // Global scale of the KSTS window (1.0 = default KSP size), clamped to a usable range on load:
         public static double UiScale = 1.0;
 
+        // Maximum age of a queued Kerbalism-drain (in-game years) before it is dropped without draining
+        // — reached when the player never brings the deployed ship into physics range for that long:
+        public static double PendingDrainMaxAgeYears = 2.0;
+
         public static void Load()
         {
             var node = GameDatabase.Instance.GetConfigNodes("KSTS_SETTINGS").FirstOrDefault();
@@ -31,8 +35,10 @@ namespace KSTS
             if (node.HasValue("ceilingSoiMargin")) CeilingSoiMargin = double.Parse(node.GetValue("ceilingSoiMargin"));
             if (node.HasValue("usedPartResourceThreshold")) UsedPartResourceThreshold = double.Parse(node.GetValue("usedPartResourceThreshold"));
             if (node.HasValue("uiScale")) UiScale = double.Parse(node.GetValue("uiScale"));
+            if (node.HasValue("pendingDrainMaxAgeYears")) PendingDrainMaxAgeYears = double.Parse(node.GetValue("pendingDrainMaxAgeYears"));
             if (UiScale < 0.5) UiScale = 0.5;
             else if (UiScale > 3.0) UiScale = 3.0;
+            if (PendingDrainMaxAgeYears < 0) PendingDrainMaxAgeYears = 0;
         }
     }
 }

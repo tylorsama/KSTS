@@ -194,6 +194,12 @@ namespace KSTS
                     GUILayout.EndScrollView();
                 }
 
+                // Skips the "must return" requirement for crewed recordings — crew stays at destination.
+                if (recording.status != FlightRecordingStatus.PRELAUNCH && recording.launchCrewCount > 0)
+                {
+                    recording.oneWay = GUILayout.Toggle(recording.oneWay, " One-way crew mission (no return required — crew delivered at destination)");
+                }
+
                 // Bottom pane with action-buttons:
                 GUILayout.BeginHorizontal();
                 if (selected != 1)
@@ -234,10 +240,17 @@ namespace KSTS
                     }
                 }
 
-                if (recording.CanFinish() && GUILayout.Button("Stop & Save", GUI.buttonStyle))
+                if (GUILayout.Button("Stop & Save", GUI.buttonStyle))
                 {
-                    // Stop recording and create a mission-profile:
-                    FlightRecorder.SaveRecording(vessel);
+                    var reason = recording.WhyCantFinish();
+                    if (reason == null)
+                    {
+                        FlightRecorder.SaveRecording(vessel);
+                    }
+                    else
+                    {
+                        ScreenMessages.PostScreenMessage("Cannot save recording: " + reason, 5f, ScreenMessageStyle.UPPER_CENTER);
+                    }
                 }
 
                 if (recording.status != FlightRecordingStatus.PRELAUNCH)

@@ -85,6 +85,27 @@ namespace KSTS
             return path;
         }
 
+        // Sets a mission/window alarm, honoring the player's KAC and stock alarm-clock preferences:
+        public static void SetAlarm(string title, string description, double ut)
+        {
+            if (KACWrapper.APIReady && MissionController.useKACifAvailable)
+            {
+                var id = KACWrapper.KAC.CreateAlarm(KACWrapper.KACAPI.AlarmTypeEnum.Raw, title, ut);
+                var a = KACWrapper.KAC.Alarms.FirstOrDefault(z => z.ID == id);
+                if (a != null) { a.AlarmAction = KACWrapper.KACAPI.AlarmActionEnum.KillWarp; a.AlarmMargin = 0; a.Notes = description; }
+            }
+            if (MissionController.useStockAlarmClock)
+            {
+                AlarmClockScenario.AddAlarm(new AlarmTypeRaw
+                {
+                    title = title,
+                    description = description,
+                    actions = { warp = AlarmActions.WarpEnum.KillWarp, message = AlarmActions.MessageEnum.Yes },
+                    ut = ut
+                });
+            }
+        }
+
         public static Mission CreateDeployment(string shipName, ShipTemplate template, Orbit orbit, MissionProfile profile, List<string> crew, string flagURL)
         {
             var mission = new Mission
@@ -149,10 +170,14 @@ namespace KSTS
                 targetVesselId = target.protoVessel.vesselID
             };
 
+            // Init dict up front so both refuel-merge (below) and cargo-fill (below) can write safely
+            // regardless of whether the player chose any cargo. Refuel goes in with negative sign so
+            // TryExecute's single AddResources loop subtracts from the target station.
+            mission.resourcesToDeliver = new Dictionary<string, double>();
+
             string transport = "";
             if (resources != null)
             {
-                mission.resourcesToDeliver = new Dictionary<string, double>();
                 foreach (var resource in resources)
                 {
                     if (resource.amount > 0)
@@ -165,6 +190,9 @@ namespace KSTS
                     }
                 }
             }
+
+            foreach (var kv in profile.refueledResources)
+                mission.resourcesToDeliver[kv.Key] = (mission.resourcesToDeliver.TryGetValue(kv.Key, out var d) ? d : 0) - kv.Value;
             if (crewTransfers != null)
             {
                 foreach (var crewTransfer in crewTransfers)
@@ -240,6 +268,7 @@ namespace KSTS
                 AlarmClockScenario.AddAlarm(alarmToSet);
             }
 
+            Debug.Log($"[KSTS] Mission.CreateTransport: target={Localizer.Format(target.vesselName)}, profile={profile.profileName}, deliver={mission.crewToDeliver?.Count ?? 0} crew, collect={mission.crewToCollect?.Count ?? 0} crew, resourcesToDeliver=[{string.Join(", ", mission.resourcesToDeliver.Select(kv => $"{kv.Key}:{kv.Value:G4}").ToArray())}]");
             return mission;
         }
 
@@ -371,6 +400,8 @@ namespace KSTS
                                     TargetVessel.AddCrewMember(targetVessel, kerbonautName);
                                 }
                             }
+                            // Refuel is already merged into resourcesToDeliver with negative sign at CreateTransport time,
+                            // so the AddResources loop above subtracts it from the target — no separate refuel loop needed here.
                         }
                         return true;
                     }
@@ -450,7 +481,7 @@ namespace KSTS
             if (pCrewMembers.Any())
             {
                 CrewTransferBatch.moveCrew(vessel, pCrewMembers, false);
-                LifeSupportWrapper.Instance.PrepForLaunch(vessel, pCrewMembers, duration);
+                USILifeSupportWrapper.Instance.PrepForLaunch(vessel, pCrewMembers, duration);
                 pCrewMembers.ForEach(pcm =>
                 {
                     pcm.rosterStatus = ProtoCrewMember.RosterStatus.Assigned;
@@ -694,13 +725,22 @@ namespace KSTS
                 }
             }
 
-            // 8) USI Life Support prep (Kerbalism needs nothing here - see method note). Uses the unloaded
-            //    vesselRef only for its id; safe to skip if USI is absent or vesselRef is null.
+            // 8) Life-support mods handling.
+
             if (protoVessel != null && protoVessel.vesselRef != null && seatedCrew.Count > 0)
             {
-                LifeSupportWrapper.Instance.PrepForLaunch(protoVessel.vesselRef, seatedCrew, duration);
+                if(USILifeSupportWrapper.Instance.Present())
+                {
+                    USILifeSupportWrapper.Instance.PrepForLaunch(protoVessel.vesselRef, seatedCrew, duration);
+                }
+                if (KerbalismWrapper.Instance.Present)
+                {
+                    // Kerbalism life support will not be initialized until the kerbalism system has handled the creation of the ship.
+                    // KSTS.cs:Timer will check for initialization and will write off ship resources when the ship is ready.
+                    ResourceDrainer.ScheduleResourceDrain(protoVessel.vesselRef, duration, seatedCrew.Count);
+                }
             }
-
+            
             // 9) Destroy the temporary live parts created by LoadShip(). They were never attached to a real Vessel;
             //    leaving them alive is exactly what caused the orphaned-part / OnStart / terrain-kill NREs.
             var destroyed = 0;
@@ -819,6 +859,7 @@ namespace KSTS
         public bool oneWayMission = true;
         public int crewCapacity = 0;
         public List<string> dockingPortTypes = null;
+        public Dictionary<string, double> refueledResources = new Dictionary<string, double>();
 
         // True when payload was delivered to a body other than the launch body. Such profiles constrain the deploy
         // orbit (altitude / inclination / eccentricity / LAN), since that manoeuvre was not demonstrated on the record.
@@ -866,23 +907,21 @@ namespace KSTS
             profile.deployEccentricity = recording.deployEccentricity;
             profile.deployLAN = recording.deployLAN;
             profile.missionDuration = recording.deploymentTime - recording.startTime;
-            profile.crewCapacity = vessel.GetCrewCapacity() - vessel.GetCrewCount(); // Capacity at the end of the mission, so we can use it for oneway- as well als return-trips.
+            profile.oneWayMission = recording.oneWay;
+            profile.crewCapacity = recording.launchCrewCount;
             profile.dockingPortTypes = recording.dockingPortTypes;
+            profile.refueledResources = new Dictionary<string, double>(recording.refueledResources);
 
-            if (vessel.situation == Vessel.Situations.LANDED || vessel.situation == Vessel.Situations.SPLASHED)
+
+            if (recording.mustReturn && (vessel.situation == Vessel.Situations.LANDED || vessel.situation == Vessel.Situations.SPLASHED))
             {
-                profile.oneWayMission = false;
                 profile.launchCost -= recording.GetCurrentVesselValue();
                 if (profile.launchCost < 0)
                 {
                     profile.launchCost = 0; // Shouldn't happen
                 }
             }
-            else
-            {
-                profile.oneWayMission = true;
-            }
-
+            Debug.Log($"[KSTS] MissionProfile created from recording: name={profile.profileName}, type={profile.missionType}, oneWay={profile.oneWayMission}, crewCap={profile.crewCapacity}, duration={profile.missionDuration:F0}s, refuel=[{string.Join(", ", profile.refueledResources.Select(kv => $"{kv.Key}:{kv.Value:G4}").ToArray())}], recorded delivered/collected crew={recording.deliveredCrewCount}/{recording.collectedCrewCount}");
             return profile;
         }
     }
@@ -1073,6 +1112,7 @@ namespace KSTS
                         if (mission.TryExecute())
                         {
                             missions.Remove(mission);
+                            
                         }
                     }
                     catch (Exception e)

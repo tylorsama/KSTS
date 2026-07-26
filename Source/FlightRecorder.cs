@@ -277,8 +277,21 @@ namespace KSTS
         public double deployInclination = 0;
         public double deployEccentricity  = 0;
         public double deployLAN = 0;
+        
+        //for crew rotation in TRANSPORT missions and refueling
+        public bool oneWay = false;
+        // Net resources gained from docked targets (positive = taken from station); populated by dock/undock handlers.
+        public Dictionary<string, double> refueledResources = new Dictionary<string, double>();
+        private Dictionary<string, double> resourcesAtDock = null; // snapshot; not persisted
+        private Guid? currentDockedTargetId = null;
+        // Net crew exchanged with docked targets. Lets WhyCantFinish accept asymmetric rotations (drop 3, keep 1).
+        public int deliveredCrewCount = 0;
+        public int collectedCrewCount = 0;
+        private int crewAtDock = -1; // transient
 
         public bool mustReturn = false;
+        // -1 = legacy recording without this field; skip crew-alive validation for grandfathering.
+        public int launchCrewCount = -1;
 
         public List<string> usedPartIds = null;
         public List<string> dockingPortTypes = null;
@@ -331,7 +344,9 @@ namespace KSTS
             {
                 this.launchCost = this.currentStats.cost;
                 this.launchMass = this.currentStats.mass;
-                if (this.currentStats.hasCrew) this.mustReturn = true;
+                this.launchCrewCount = vessel.GetCrewCount();
+                if (this.currentStats.hasCrew && !this.oneWay) 
+                    this.mustReturn = true;
                 else this.mustReturn = false;
             }
 
@@ -380,23 +395,79 @@ namespace KSTS
             return true;
         }
 
-        public bool CanFinish()
+        public bool CanFinish() => WhyCantFinish() == null;
+
+        // Returns null if the recording can be saved, otherwise a player-facing reason string.
+        public string WhyCantFinish()
         {
-            if (this.status != FlightRecordingStatus.DESCENDING) return false;
-            if (this.payloadMass <= 0) return false;
+            if (this.status != FlightRecordingStatus.DESCENDING) return "Recording still active — no payload delivered";
+            bool crewIsPayload = oneWay && launchCrewCount > 0;
+            if (payloadMass <= 0 && !crewIsPayload) return "Recording still active — no payload delivered";
+            if (oneWay)
+            {
+                // Crew should be alive and on-board
+                if (launchCrewCount > 0 && vessel.GetCrewCount() != launchCrewCount)
+                    return $"Crew missing: expected {launchCrewCount}, found {vessel.GetCrewCount()}";
+                return null; // ok — payload=crew, drop off happens at mission execution
+            }
             if (this.mustReturn)
             {
-                // Return missions (crewed) must fly back and land on the body they launched from:
-                if (this.vessel.mainBody.bodyName != this.launchBodyName) return false;
-                if (this.vessel.situation == Vessel.Situations.LANDED || this.vessel.situation == Vessel.Situations.SPLASHED) return true;
-                return false;
+                if (this.vessel.mainBody.bodyName != this.launchBodyName) return "Return to launch body and land before saving";
+                if (this.vessel.situation != Vessel.Situations.LANDED && this.vessel.situation != Vessel.Situations.SPLASHED) return "Return to launch body and land before saving";
+                // Expected = launched − delivered + collected. Guards against mid-flight deaths and untracked losses.
+                var expected = this.launchCrewCount - this.deliveredCrewCount + this.collectedCrewCount;
+                if (this.launchCrewCount > 0 && this.vessel.GetCrewCount() != expected)
+                    return $"Crew mismatch at landing: expected {expected}, found {this.vessel.GetCrewCount()} — recording invalid";
             }
-            else
+            return null;
+        }
+
+        // Snapshot resources + crew before merge. Docking-port coupling only — separators/decouplers not tracked.
+        public void OnDockedWith(Vessel otherVessel)
+        {
+            if (this.vessel == null) { Debug.LogWarning("[KSTS] FlightRecording.OnDockedWith: recording.vessel is null, snapshot skipped"); return; }
+            resourcesAtDock = SnapshotResources(this.vessel);
+            crewAtDock = this.vessel.GetCrewCount();
+            currentDockedTargetId = otherVessel != null ? (Guid?)otherVessel.id : null;
+            Debug.Log($"[KSTS] FlightRecording: docked to {(otherVessel != null ? otherVessel.vesselName : "?")}, snapshot {resourcesAtDock.Count} resource(s), crew={crewAtDock}");
+        }
+
+        // Delta vs snapshot; positive = we gained (refueled). Negative = we gave (handled via DeployPayloadResources).
+        public void OnUndockedFrom(Vessel otherVessel)
+        {
+            if (this.vessel == null) { Debug.LogWarning("[KSTS] FlightRecording.OnUndockedFrom: recording.vessel is null, skipped"); return; }
+            if (resourcesAtDock == null) { Debug.LogWarning($"[KSTS] FlightRecording.OnUndockedFrom: no dock snapshot for {this.vessel.vesselName} (undock without matching dock?), skipped"); return; }
+
+            var now = SnapshotResources(this.vessel);
+            var gained = new List<string>();
+            foreach (var kv in now)
             {
-                // One-way mission: the payload is already released, so the recording can be saved right here —
-                // including deliveries to another body, with no need to return to the launch body.
-                return true;
+                var before = resourcesAtDock.TryGetValue(kv.Key, out var v) ? v : 0;
+                var delta = kv.Value - before;
+                if (delta <= 0) continue;
+                refueledResources[kv.Key] = (refueledResources.TryGetValue(kv.Key, out var r) ? r : 0) + delta;
+                gained.Add($"{kv.Key}+{delta:G4}");
             }
+            var crewDelta = 0;
+            if (crewAtDock >= 0)
+            {
+                crewDelta = crewAtDock - this.vessel.GetCrewCount();
+                if (crewDelta > 0) deliveredCrewCount += crewDelta;
+                else if (crewDelta < 0) collectedCrewCount += -crewDelta;
+                crewAtDock = -1;
+            }
+            Debug.Log($"[KSTS] FlightRecording: undocked from {(otherVessel != null ? otherVessel.vesselName : "?")}, refuel=[{string.Join(", ", gained.ToArray())}], crewDelta={crewDelta} (totals: delivered={deliveredCrewCount}, collected={collectedCrewCount})");
+            resourcesAtDock = null;
+            currentDockedTargetId = null;
+        }
+
+        private static Dictionary<string, double> SnapshotResources(Vessel v)
+        {
+            var snap = new Dictionary<string, double>();
+            foreach (var part in v.parts)
+                foreach (var r in part.Resources)
+                    snap[r.resourceName] = (snap.TryGetValue(r.resourceName, out var acc) ? acc : 0) + r.amount;
+            return snap;
         }
 
         public void DeployPayloadResources(Dictionary<string, double> requestedResources)
@@ -690,6 +761,35 @@ namespace KSTS
                 Debug.LogError("getFlightRecording(): " + e.ToString());
             }
             return recording;
+        }
+
+        // Fires BEFORE merge — vessel refs still separate, safe to snapshot.
+        public static void OnPartCouple(GameEvents.FromToAction<Part, Part> data)
+        {
+            if (data.from == null || data.to == null) return;
+            RouteDock(data.from.vessel, data.to.vessel);
+            RouteDock(data.to.vessel, data.from.vessel);
+        }
+
+        public static void OnVesselsUndocking(Vessel v1, Vessel v2)
+        {
+            if (v1 == null || v2 == null) return;
+            RouteUndock(v1, v2);
+            RouteUndock(v2, v1);
+        }
+
+        private static void RouteDock(Vessel ours, Vessel other)
+        {
+            if (ours == null) return;
+            if (flightRecordings != null && flightRecordings.TryGetValue(ours.id.ToString(), out var rec))
+                rec.OnDockedWith(other);
+        }
+
+        private static void RouteUndock(Vessel ours, Vessel other)
+        {
+            if (ours == null) return;
+            if (flightRecordings != null && flightRecordings.TryGetValue(ours.id.ToString(), out var rec))
+                rec.OnUndockedFrom(other);
         }
 
         // Adds the given recording to the list of running recordings:
