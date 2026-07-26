@@ -16,10 +16,14 @@ namespace KSTS
 
         // A payload part counts as "used" only if a massed resource drained more than this fraction of its
         // capacity during the recording (keeps slow life-support drain of empty crew pods from disqualifying them):
-        public static double UsedPartResourceThreshold = 0.01;  // fraction of capacity (0.01 = 1%)
+        public static double UsedPartResourceThreshold = 0.03;  // fraction of capacity (0.01 = 1%)
 
         // Global scale of the KSTS window (1.0 = default KSP size), clamped to a usable range on load:
         public static double UiScale = 1.0;
+
+        // Interplanetary deliveries may only launch inside a transfer window (see TransferWindow):
+        public static bool EnforceTransferWindows = true;
+        public static double TransferWindowToleranceDeg = 6.0;  // window half-width, in phase-angle degrees
 
         // Maximum age of a queued Kerbalism-drain (in-game years) before it is dropped without draining
         // — reached when the player never brings the deployed ship into physics range for that long:
@@ -35,6 +39,8 @@ namespace KSTS
             if (node.HasValue("ceilingSoiMargin")) CeilingSoiMargin = double.Parse(node.GetValue("ceilingSoiMargin"));
             if (node.HasValue("usedPartResourceThreshold")) UsedPartResourceThreshold = double.Parse(node.GetValue("usedPartResourceThreshold"));
             if (node.HasValue("uiScale")) UiScale = double.Parse(node.GetValue("uiScale"));
+            if (node.HasValue("enforceTransferWindows")) EnforceTransferWindows = bool.Parse(node.GetValue("enforceTransferWindows"));
+            if (node.HasValue("transferWindowToleranceDeg")) TransferWindowToleranceDeg = double.Parse(node.GetValue("transferWindowToleranceDeg"));
             if (node.HasValue("pendingDrainMaxAgeYears")) PendingDrainMaxAgeYears = double.Parse(node.GetValue("pendingDrainMaxAgeYears"));
             if (UiScale < 0.5) UiScale = 0.5;
             else if (UiScale > 3.0) UiScale = 3.0;

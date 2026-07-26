@@ -25,6 +25,28 @@ namespace KSTS
             GUILayout.EndHorizontal();
             return false;
         }
+
+        // For interplanetary profiles: returns true only inside a transfer window; otherwise renders a
+        // "next window in T" notice + a Set Alarm button and returns false. Non-interplanetary -> always true.
+        protected static bool TransferWindowReady(MissionProfile profile)
+        {
+            if (!KSTSSettings.EnforceTransferWindows || profile == null) return true;
+            var launch = FlightGlobals.GetBodyByName(profile.launchBodyName);
+            var target = FlightGlobals.GetBodyByName(profile.destinationBodyName);
+            CelestialBody a, b;
+            if (launch == null || target == null || !TransferWindow.IsInterplanetary(launch, target, out a, out b)) return true;
+
+            var now = Planetarium.GetUniversalTime();
+            if (TransferWindow.IsWindowOpen(a, b, now, KSTSSettings.TransferWindowToleranceDeg)) return true;
+
+            var wait = TransferWindow.TimeToNextWindow(a, b, now);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("<color=#D35555><b>Transfer window to " + target.bodyName + " in " + GUI.FormatDuration(wait) + "</b></color>", new GUIStyle(GUI.labelStyle) { stretchWidth = true });
+            if (GUILayout.Button("Set Alarm", new GUIStyle(GUI.buttonStyle) { stretchWidth = false }))
+                Mission.SetAlarm("KSTS window: " + a.bodyName + " -> " + target.bodyName, "Transfer window for a KSTS delivery to " + target.bodyName, now + wait);
+            GUILayout.EndHorizontal();
+            return false;
+        }
     }
 
     class GUIStartDeployMissionTab : GUIStartMissionTab
@@ -125,6 +147,7 @@ namespace KSTS
         {
             currentCost = 0;
             var ready = DisplayInner();
+            if (ready) ready = TransferWindowReady(missionProfileSelector.selectedProfile);
             var launch = DisplayFooter(currentCost, ready);
             if (launch)
             {
@@ -240,6 +263,7 @@ namespace KSTS
         {
             currentCost = 0;
             var ready = DisplayInner();
+            if (ready) ready = TransferWindowReady(missionProfileSelector.selectedProfile);
             if (ready) ready = DisplayRefuelCheck();
             var launch = DisplayFooter(currentCost, ready);
             if (launch)
@@ -432,6 +456,7 @@ namespace KSTS
         {
             currentCost = 0;
             var ready = DisplayInner();
+            if (ready) ready = TransferWindowReady(missionProfileSelector.selectedProfile);
             var launch = DisplayFooter(currentCost, ready);
             if (launch)
             {

@@ -129,10 +129,19 @@ namespace KSTS
                     var color = "";
 
                     // Build the descriptive text with highlighting:
-                    var description = "<color=#F9FA86><b>" + missionProfile.profileName + "</b></color> <color=#FFFFFF>(" + missionProfile.vesselName + ")\n";
-                    description += "<b>Mass:</b> " + missionProfile.launchMass.ToString("0.0t") + ", <b>Cost:</b> <color=#B3D355>" + missionProfile.launchCost.ToString("#,##0√")
-                            + "</color> (<color=#B3D355>" + (missionProfile.launchCost / missionProfile.payloadMass).ToString("#,##0√") + "</color>/t), ";
-
+     
+                      
+                    var transferType = "To Body Orbit";
+                    if (missionProfile.launchBodyName != missionProfile.destinationBodyName)
+                    {
+                        var launch = FlightGlobals.GetBodyByName(missionProfile.launchBodyName);
+                        var target = FlightGlobals.GetBodyByName(missionProfile.destinationBodyName);
+                        transferType = TransferWindow.IsInterplanetary(launch, target) ? "Interplanetary" : "To Moon";
+                    }
+                 
+                    var description = $"<color=#F9FA86><b>{missionProfile.profileName}</b></color> <color=#FFFFFF>({missionProfile.vesselName})\n";
+                    description += $"<b>Mass:</b> {missionProfile.launchMass:0.0t}, <b>Cost:</b> <color=#B3D355>{missionProfile.launchCost:#,##0√}</color> (<color=#B3D355>" +
+                                   $"{missionProfile.launchCost / missionProfile.payloadMass:#,##0√}</color>/t), ";
                     // One-Way or Round-Trip:
                     var missionRouteDetails = "";
                     if (missionProfile.oneWayMission) missionRouteDetails = "one-way";
@@ -144,7 +153,10 @@ namespace KSTS
                         missionRouteDetails = "<color=" + color + ">" + missionRouteDetails + "</color>";
                     }
                     description += missionRouteDetails + "\n";
-
+                    //Launch and destination bodies
+                    description += "<b>Launch body:</b> " + missionProfile.launchBodyName +
+                                   ", <b>Destination body:</b> " + missionProfile.destinationBodyName + "\n" +
+                                   "<b>Transfer type:</b> " + transferType + "\n";
                     // Mission-Type:
                     var missionType = MissionProfile.GetMissionProfileTypeName(missionProfile.missionType);
                     if (this.filterMissionType != null)
