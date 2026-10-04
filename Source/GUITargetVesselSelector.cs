@@ -41,7 +41,7 @@ namespace KSTS
             GUILayout.Label("Filter:");
             nameSearch = GUILayout.TextField(nameSearch, GUILayout.Width(200));
             GUILayout.EndHorizontal();
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            scrollPos = GUI.BeginAutoScroll("GUITargetVesselSelector:44", scrollPos);
             var green = "#00FF00";
             var red = "#FF0000";
 
@@ -142,7 +142,7 @@ namespace KSTS
                     targetVessel = validTargets[selectedIndex];
                 }
             }
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUITargetVesselSelector:44");
             return targetVessel != null;
         }
     }

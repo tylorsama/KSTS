@@ -116,7 +116,7 @@ namespace KSTS
             if (orbitEditor == null) orbitEditor = new GUIOrbitEditor(missionProfileSelector.selectedProfile);
             if (crewTransferSelector == null) crewTransferSelector = new GUICrewTransferSelector(payloadShipSelector.payload, missionProfileSelector.selectedProfile);
             if (flagSelector == null) flagSelector = new GUIFlagSelector();
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            scrollPos = GUI.BeginAutoScroll("GUIStartMissionTab:119", scrollPos);
 
             GUILayout.Label("<size=14><b>Mission Parameters:</b></size>");
             GUILayout.BeginHorizontal();
@@ -139,7 +139,7 @@ namespace KSTS
             GUILayout.Label("");
             flagSelector.ShowButton();
 
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUIStartMissionTab:119");
             return selectionIsValid;
         }
 
@@ -379,7 +379,7 @@ namespace KSTS
             if (flagSelector == null) flagSelector = new GUIFlagSelector();
 
             // Display Construction-Info:
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            scrollPos = GUI.BeginAutoScroll("GUIStartMissionTab:382", scrollPos);
             GUILayout.Label("<size=14><b>Construction Info:</b></size>");
 
             GUILayout.BeginHorizontal();
@@ -448,7 +448,7 @@ namespace KSTS
             GUILayout.Label("");
             flagSelector.ShowButton();
 
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUIStartMissionTab:382");
             return selectionIsValid;
         }
 

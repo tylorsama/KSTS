@@ -51,7 +51,7 @@ namespace KSTS
             selectedTransportType = GUILayout.Toolbar(selectedTransportType, transportTypeStrings);
             GUILayout.EndHorizontal();
 
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            scrollPos = GUI.BeginAutoScroll("GUITransportSelector:54", scrollPos);
             if (selectedTransportType == (int)TransportTypes.Resources)
             {
                 // Transport Resources:
@@ -109,7 +109,7 @@ namespace KSTS
                 }
             }
 
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUITransportSelector:54");
             return selectedResources != null || selectedCrewTransfers != null;
         }
     }

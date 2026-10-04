@@ -19,6 +19,7 @@ namespace KSTS
         {
             if (GUI.showGui)
             {
+                GUI.FitWindowToContent();
                 var previousMatrix = GUI.BeginScale();
                 GUI.windowPosition = ClickThruBlocker.GUILayoutWindow(winId, GUI.windowPosition, OnWindow, ""); //, GUI.windowStyle);
                 GUI.EndScale(previousMatrix);

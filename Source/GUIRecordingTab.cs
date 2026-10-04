@@ -91,7 +91,7 @@ namespace KSTS
                 GUILayout.EndHorizontal();
 
                 // Display all Information about the current recording:
-                GUILayout.BeginScrollView(new Vector2(0, 0), new GUIStyle(GUI.scrollStyle) { stretchHeight = true });
+                GUI.BeginAutoScroll("GUIRecordingTab:94", new Vector2(0, 0));
                 var displayAttributes = recording.GetDisplayAttributes();
                 foreach (var displayAttribute in displayAttributes)
                 {
@@ -100,7 +100,7 @@ namespace KSTS
                     GUILayout.Label(displayAttribute.Value + "  ", new GUIStyle(GUI.labelStyle) { alignment = TextAnchor.MiddleRight });
                     GUILayout.EndHorizontal();
                 }
-                GUILayout.EndScrollView();
+                GUI.EndAutoScroll("GUIRecordingTab:94");
                 int selected = 0;
                 // Display payload selector:
                 if (recording.status == FlightRecordingStatus.ASCENDING || recording.status == FlightRecordingStatus.PRELAUNCH)
@@ -111,7 +111,7 @@ namespace KSTS
                     selectedMissionTypeTab = GUILayout.Toolbar(selectedMissionTypeTab, missionTypeStrings);
                     GUILayout.EndHorizontal();
                
-                    scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle, GUILayout.Height(210), GUILayout.MaxHeight(210));
+                    scrollPos = GUI.BeginAutoScroll("GUIRecordingTab:114", scrollPos);
                     if (selectedMissionTypeTab == (int)MissionTypes.Deploy)
                     {
                         // Show all deployable payloads:
@@ -191,7 +191,7 @@ namespace KSTS
                             GUILayout.EndHorizontal();
                         }
                     }
-                    GUILayout.EndScrollView();
+                    GUI.EndAutoScroll("GUIRecordingTab:114");
                 }
 
                 // Skips the "must return" requirement for crewed recordings — crew stays at destination.

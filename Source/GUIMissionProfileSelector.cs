@@ -93,7 +93,7 @@ namespace KSTS
                 GUILayout.EndHorizontal();
             }
 
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            scrollPos = GUI.BeginAutoScroll("GUIMissionProfileSelector:96", scrollPos);
             var green = "#00FF00";
             var red = "#FF0000";
 
@@ -301,7 +301,7 @@ namespace KSTS
                 }
             }
 
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUIMissionProfileSelector:96");
             return this.selectedProfile != null;
         }
     }

@@ -12,7 +12,7 @@ namespace KSTS
 
         public static void Display()
         {
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            scrollPos = GUI.BeginAutoScroll("GUIFlightsTab:15", scrollPos);
             if (MissionController.missions.Count == 0)
             {
                 GUILayout.Label("<b>No active missions.</b>");
@@ -30,7 +30,7 @@ namespace KSTS
                 
                 GUILayout.SelectionGrid(-1, contents.ToArray(), 1, GUI.selectionGridStyle);
             }
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUIFlightsTab:15");
         }
     }
 }

@@ -243,6 +243,48 @@ namespace KSTS
             UnityEngine.GUI.matrix = previous;
         }
 
+        // Since the Unity 2019 update (KSP 1.8), a GUILayout scroll view no longer asks its window for the height of
+        // its content: it reports a minimum of 32px and the window keeps whatever height its Rect last had, so every
+        // tab was squeezed into the initial 400px and the rest was cut off. Instead we remember each scroll view's
+        // content height from the previous repaint and request exactly that, capped to what fits on screen (beyond
+        // that it scrolls). Together with resetting the window height every frame (see FitWindowToContent), the
+        // window grows and shrinks with the active tab.
+        private static readonly Dictionary<string, float> scrollContentHeights = new Dictionary<string, float>();
+        private const float DEFAULT_SCROLL_HEIGHT = 300;
+        private const float MIN_SCROLL_HEIGHT = 60;
+        private const float WINDOW_CHROME_HEIGHT = 220; // Title, tab bar and the buttons some tabs draw below their list.
+
+        public static Vector2 BeginAutoScroll(string key, Vector2 scrollPos)
+        {
+            if (!scrollContentHeights.TryGetValue(key, out float contentHeight)) contentHeight = DEFAULT_SCROLL_HEIGHT;
+            var scale = (float)KSTSSettings.UiScale;
+            var maxHeight = Mathf.Max(MIN_SCROLL_HEIGHT, (Screen.height - windowPosition.y) / scale - WINDOW_CHROME_HEIGHT);
+            var height = Mathf.Clamp(contentHeight, MIN_SCROLL_HEIGHT, maxHeight);
+            return GUILayout.BeginScrollView(scrollPos, scrollStyle, GUILayout.Height(height));
+        }
+
+        public static void EndAutoScroll(string key)
+        {
+            if (Event.current.type == EventType.Repaint)
+            {
+                try
+                {
+                    // Inside the scroll view, the last control's rect is in content coordinates, so its bottom edge is
+                    // the content height:
+                    scrollContentHeights[key] = GUILayoutUtility.GetLastRect().yMax + scrollStyle.padding.vertical + 4;
+                }
+                catch (ArgumentException) { } // Nothing was drawn inside the scroll view this frame.
+            }
+            GUILayout.EndScrollView();
+        }
+
+        // Called by the scene helpers right before GUILayoutWindow: a GUILayout window only ever grows to its content's
+        // minimum size, so dropping the height lets it shrink back when a shorter tab is selected.
+        public static void FitWindowToContent()
+        {
+            windowPosition.height = 0;
+        }
+
         // Is called by our helper-classes to draw the actual window:
         public static void DrawWindow()
         {
@@ -291,9 +333,9 @@ namespace KSTS
                     case 1:
                         if (HighLogic.LoadedScene == GameScenes.FLIGHT)
                         {
-                            GUILayout.BeginScrollView(Vector2.zero, GUI.scrollStyle);
+                            GUI.BeginAutoScroll("GUI:294", Vector2.zero);
                             GUILayout.Label("<b>Please go to the Space Center to launch a new mission.</b>");
-                            GUILayout.EndScrollView();
+                            GUI.EndAutoScroll("GUI:294");
                         }
                         else if (GUIStartDeployMissionTab.Display()) selectedMainTab = 0;
                         break;
@@ -302,9 +344,9 @@ namespace KSTS
                     case 2:
                         if (HighLogic.LoadedScene == GameScenes.FLIGHT)
                         {
-                            GUILayout.BeginScrollView(Vector2.zero, GUI.scrollStyle);
+                            GUI.BeginAutoScroll("GUI:305", Vector2.zero);
                             GUILayout.Label("<b>Please go to the Space Center to launch a new mission.</b>");
-                            GUILayout.EndScrollView();
+                            GUI.EndAutoScroll("GUI:305");
                         }
                         else if (GUIStartTransportMissionTab.Display()) selectedMainTab = 0;
                         break;
@@ -313,9 +355,9 @@ namespace KSTS
                     case 3:
                         if (HighLogic.LoadedScene == GameScenes.FLIGHT)
                         {
-                            GUILayout.BeginScrollView(Vector2.zero, GUI.scrollStyle);
+                            GUI.BeginAutoScroll("GUI:316", Vector2.zero);
                             GUILayout.Label("<b>Please go to the Space Center to launch a new mission.</b>");
-                            GUILayout.EndScrollView();
+                            GUI.EndAutoScroll("GUI:316");
                         }
                         else if (GUIStartConstructMissionTab.Display()) selectedMainTab = 0;
                         break;
@@ -327,20 +369,20 @@ namespace KSTS
 
                     // Help:
                     case 5:
-                        helpTabScrollPos = GUILayout.BeginScrollView(helpTabScrollPos, GUI.scrollStyle);
+                        helpTabScrollPos = GUI.BeginAutoScroll("GUI:330", helpTabScrollPos);
                         GUILayout.Label(helpText);
-                        GUILayout.EndScrollView();
+                        GUI.EndAutoScroll("GUI:330");
                         break;
 
                     case 6:
 
                         GUILayout.Label("<size=14><b>Alarm Clock Settings:</b></size>");
-                        GUILayout.BeginScrollView(new Vector2(0, 0), GUI.scrollStyle);
+                        GUI.BeginAutoScroll("GUI:338", new Vector2(0, 0));
 
                         MissionController.useKACifAvailable = GUILayout.Toggle(MissionController.useKACifAvailable, "Use Kerbal Alarm Clock (if available)");
                         MissionController.useStockAlarmClock = GUILayout.Toggle(MissionController.useStockAlarmClock, "Use Stock Alarm Clock");
 
-                        GUILayout.EndScrollView();
+                        GUI.EndAutoScroll("GUI:338");
 
                         break;
 

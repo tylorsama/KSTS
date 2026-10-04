@@ -1,5 +1,14 @@
 ChangeLog
-X.X.X - [correct version number should be added after merge]
+2.0.5 (tylorsama/KSTS fork)
+        Merged every public fork with code changes since 2.0.4:
+        - Dev-Time: upstream PR #12 by codeandsolder (thumbnails rendered from craft files, cached ship templates), obsolete part-module stripping fix
+        - tius-minecraft: crew transfer to inflatable modules, fill-crew/deselect buttons, recover missions from contracts
+        - SaNya048: the entries below
+        Fixed windows not expanding to show all of their content since the Unity 2019 update (KSP 1.8): scroll views now
+        size to their content (capped to the screen) and the window grows and shrinks with the active tab
+        Added build.ps1 to compile against a local KSP install without Visual Studio
+
+2.0.5-pre (SaNya048)
         Feature added - Kerbalism support:
         - Payload vessels in Deploy mission will be drained on Food/Water/etc upon arrival
         - Due Kerbalism API limitations it is not possible to precalculate drain before the mission starts, only when vessel is open in tracking station (and Kerbalism stuff is initialised)

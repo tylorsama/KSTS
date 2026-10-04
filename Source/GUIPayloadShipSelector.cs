@@ -64,7 +64,7 @@ namespace KSTS
             GUILayout.Space(30);
             selSubassembly = GUILayout.Toggle(selSubassembly, "Subassemblies");
             GUILayout.EndHorizontal();
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            scrollPos = GUI.BeginAutoScroll("GUIPayloadShipSelector:67", scrollPos);
 
             // Show list with all possible payloads:
             var contents = new List<GUIContent>();
@@ -99,7 +99,7 @@ namespace KSTS
                 // The player has selected a payload:
                 payload = GUI.shipTemplates[indexReference[selectedIndex]];
             }
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUIPayloadShipSelector:67");
             return payload != null;
         }
     }
