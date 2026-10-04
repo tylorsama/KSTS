@@ -37,7 +37,7 @@ namespace KSTS
             } 
             else 
             {
-                if (vessel.orbit.referenceBody.bodyName != profile.bodyName) return false; // Can only record orbits around the same body as the profile
+                if (vessel.orbit.referenceBody.bodyName != profile.destinationBodyName) return false; // Can only record orbits around the same body as the profile
 
                 bool hasMatchingPort = false;
                 foreach (string dockingPortType in dockingPortTypes)
@@ -119,6 +119,17 @@ namespace KSTS
                 Debug.LogError("GetFreeResourcesCapacities(" + Localizer.Format(vessel.vesselName) + "): " + e.ToString());
             }
             return availableResources;
+        }
+
+        // Sum current amount of a resource across all proto-parts (works on unloaded vessels).
+        public static double GetResourceAmount(Vessel vessel, string resourceName)
+        {
+            double total = 0;
+            foreach (var protoPart in vessel.protoVessel.protoPartSnapshots)
+                foreach (var protoResource in protoPart.resources)
+                    if (protoResource.resourceName == resourceName)
+                        total += protoResource.amount;
+            return total;
         }
 
         // Returns the number of seats of the given vessel, even if it is not loaded:
@@ -238,50 +249,59 @@ namespace KSTS
             }
         }
 
-        // Adds the given amount of resources to the (unloaded) ship provided:
+        // Positive amount fills tanks up to maxAmount, negative drains down to 0. Unloaded vessels only.
         public static void AddResources(Vessel vessel, string resourceName, double amount)
         {
-            // While it is possible to manipulate the resources on loaded vessels, our crew-transport missions
-            // only work on unloaded ships and we would have to implement two different routines for this use-case,
-            // so we only allow adding resources on unloaded ships:
             if (vessel.loaded) throw new Exception("TargetVessel.AddResources can only be called on unloaded vessels");
             try
             {
-                var amountToAdd = amount;
-                foreach (var protoPart in vessel.protoVessel.protoPartSnapshots)
-                {
-                    if (amountToAdd <= 0) break;
-                    foreach (var protoResource in protoPart.resources)
-                    {
-                        if (protoResource.resourceName != resourceName) continue;
-                        var partAmount = protoResource.amount; 
-                        var capacity = protoResource.maxAmount - partAmount;
-                        if (capacity <= 0) continue;
-                        if (capacity > amountToAdd)
-                        {
-                            if (capacity - amountToAdd < 0.01) amountToAdd = capacity; // Just to correct some irregularities with floats
-                            protoResource.amount = partAmount + amountToAdd;
-                            amountToAdd = 0;
-                        }
-                        else
-                        {
-                            protoResource.amount = partAmount + capacity;
-                            amountToAdd -= capacity;
-                        }
-                    }
-                }
+                var adding = amount >= 0;
+                var tanks = SelectTanksForTransfer(vessel, resourceName, adding);
+                var transferred = ApplyTransfer(tanks, Math.Abs(amount), adding);
 
-                // Notyfy other mods about the modification of the vessel:
                 GameEvents.onVesselWasModified.Fire(vessel);
-
-                // Log Message about the transfer:
-                Log.Warning("added " + (amount - amountToAdd).ToString() + " / " + amount.ToString() + " of " + resourceName + " to " + Localizer.Format(vessel.vesselName));
-                ScreenMessages.PostScreenMessage(Localizer.Format(vessel.vesselName) + " received " + Math.Round(amount + amountToAdd).ToString() + " of " + resourceName);
+                LogTransfer(vessel, resourceName, Math.Abs(amount), transferred, adding);
             }
             catch (Exception e)
             {
-                Debug.LogError("TargetVessel.AddResources("+ Localizer.Format(vessel.vesselName) + ","+resourceName+","+amount.ToString()+"): " + e.ToString());
+                Debug.LogError("TargetVessel.AddResources(" + Localizer.Format(vessel.vesselName) + "," + resourceName + "," + amount.ToString() + "): " + e.ToString());
             }
+        }
+
+        // Consolidation ordering: on fill, top off fullest first (keeps empties empty);
+        // on drain, empty near-empty first (keeps fullest tanks full).
+        private static IEnumerable<ProtoPartResourceSnapshot> SelectTanksForTransfer(Vessel vessel, string resourceName, bool adding)
+        {
+            var all = vessel.protoVessel.protoPartSnapshots
+                .SelectMany(p => p.resources)
+                .Where(r => r.resourceName == resourceName);
+            return adding ? all.OrderByDescending(r => r.amount) : all.OrderBy(r => r.amount);
+        }
+
+        // Mutates tanks in order until `remaining` is exhausted. Returns actually transferred amount (always positive).
+        private static double ApplyTransfer(IEnumerable<ProtoPartResourceSnapshot> tanks, double remaining, bool adding)
+        {
+            var requested = remaining;
+            foreach (var tank in tanks)
+            {
+                if (remaining <= 0) break;
+                var headroom = adding ? tank.maxAmount - tank.amount : tank.amount;
+                if (headroom <= 0) continue;
+                var take = Math.Min(headroom, remaining);
+                if (headroom - take < 0.01) take = headroom;
+                tank.amount += adding ? take : -take;
+                remaining -= take;
+            }
+            return requested - remaining;
+        }
+
+        private static void LogTransfer(Vessel vessel, string resourceName, double requested, double transferred, bool adding)
+        {
+            var verb = adding ? "added" : "withdrew";
+            var preposition = adding ? " to " : " from ";
+            var screenVerb = adding ? " received " : " lost ";
+            Log.Warning(verb + " " + transferred + " / " + requested + " of " + resourceName + preposition + Localizer.Format(vessel.vesselName));
+            ScreenMessages.PostScreenMessage(Localizer.Format(vessel.vesselName) + screenVerb + Math.Round(transferred) + " of " + resourceName);
         }
 
         // Adds to given kerbal as a crew-member to the (unloaded) vessel:

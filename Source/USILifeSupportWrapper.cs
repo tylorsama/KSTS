@@ -7,20 +7,20 @@ using static KSTS.Statics;
 
 namespace KSTS
 {
-    public class LifeSupportWrapper
+    public class USILifeSupportWrapper
     {
 
-        static LifeSupportWrapper instance = null;
+        static USILifeSupportWrapper instance = null;
         static readonly object padlock = new object();
 
         UsiApi _usiApi;
 
-        LifeSupportWrapper()
+        USILifeSupportWrapper()
         {
             _usiApi = new UsiApi();
         }
 
-        public static LifeSupportWrapper Instance
+        public static USILifeSupportWrapper Instance
         {
             get
             {
@@ -28,7 +28,7 @@ namespace KSTS
                 {
                     if (instance == null)
                     {
-                        instance = new LifeSupportWrapper();
+                        instance = new USILifeSupportWrapper();
                     }
                     return instance;
                 }
@@ -56,6 +56,10 @@ namespace KSTS
             }
         }
 
+        public bool Present()
+        {
+            return _usiApi.Present;
+        }
         class UsiApi
         {
             private readonly Type _lifeSupportManager;
@@ -96,7 +100,7 @@ namespace KSTS
                 //    TrackKerbal(k);
                 //}
 
-                _lifeSupportManager = LifeSupportWrapper.GetType("LifeSupport.LifeSupportManager");
+                _lifeSupportManager = USILifeSupportWrapper.GetType("LifeSupport.LifeSupportManager");
                 if (_lifeSupportManager != null)
                 {
                     _instance = _lifeSupportManager.GetProperty("Instance");
@@ -104,7 +108,7 @@ namespace KSTS
                     _fetchVessel = _lifeSupportManager.GetMethod("FetchVessel");
                     _trackKerbal = _lifeSupportManager.GetMethod("TrackKerbal");
 
-                    _lifeSupportStatus = LifeSupportWrapper.GetType("LifeSupport.LifeSupportStatus");
+                    _lifeSupportStatus = USILifeSupportWrapper.GetType("LifeSupport.LifeSupportStatus");
                     _timeProperties = new PropertyInfo[] {
                         _lifeSupportStatus.GetProperty("LastMeal"),
                         _lifeSupportStatus.GetProperty("LastEC"),

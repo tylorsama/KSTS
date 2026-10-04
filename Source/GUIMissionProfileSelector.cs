@@ -23,6 +23,10 @@ namespace KSTS
         public List<string> filterDockingPortTypes = null;
         public CelestialBody filterBody = null;
         public MissionProfileType? filterMissionType = null;
+        public double? filterPeriapsis = null;    // target periapsis, for off-origin "recorded orbit or higher" check
+        public double? filterInclination = null;  // target inclination, for the off-origin tolerance band
+        public double? filterEccentricity = null; // target eccentricity, for the off-origin tolerance band
+        public double? filterLAN = null;          // target longitude of ascending node, for the off-origin tolerance band
 
         // Makes sure that the cached settings are still valid (eg if the player has deleted the selected profile):
         private void CheckInternals()
@@ -42,7 +46,11 @@ namespace KSTS
                 || filterRoundTrip != null
                 || filterDockingPortTypes != null
                 || filterBody != null
-                || filterMissionType != null;
+                || filterMissionType != null
+                || filterPeriapsis != null
+                || filterInclination != null
+                || filterEccentricity != null
+                || filterLAN != null;
         }
 
         // Displays the currently selected mission-profile and returns true, if the player has deselected the profile:
@@ -121,10 +129,19 @@ namespace KSTS
                     var color = "";
 
                     // Build the descriptive text with highlighting:
-                    var description = "<color=#F9FA86><b>" + missionProfile.profileName + "</b></color> <color=#FFFFFF>(" + missionProfile.vesselName + ")\n";
-                    description += "<b>Mass:</b> " + missionProfile.launchMass.ToString("0.0t") + ", <b>Cost:</b> <color=#B3D355>" + missionProfile.launchCost.ToString("#,##0√")
-                            + "</color> (<color=#B3D355>" + (missionProfile.launchCost / missionProfile.payloadMass).ToString("#,##0√") + "</color>/t), ";
-
+     
+                      
+                    var transferType = "To Body Orbit";
+                    if (missionProfile.launchBodyName != missionProfile.destinationBodyName)
+                    {
+                        var launch = FlightGlobals.GetBodyByName(missionProfile.launchBodyName);
+                        var target = FlightGlobals.GetBodyByName(missionProfile.destinationBodyName);
+                        transferType = TransferWindow.IsInterplanetary(launch, target) ? "Interplanetary" : "To Moon";
+                    }
+                 
+                    var description = $"<color=#F9FA86><b>{missionProfile.profileName}</b></color> <color=#FFFFFF>({missionProfile.vesselName})\n";
+                    description += $"<b>Mass:</b> {missionProfile.launchMass:0.0t}, <b>Cost:</b> <color=#B3D355>{missionProfile.launchCost:#,##0√}</color> (<color=#B3D355>" +
+                                   $"{missionProfile.launchCost / missionProfile.payloadMass:#,##0√}</color>/t), ";
                     // One-Way or Round-Trip:
                     var missionRouteDetails = "";
                     if (missionProfile.oneWayMission) missionRouteDetails = "one-way";
@@ -136,7 +153,10 @@ namespace KSTS
                         missionRouteDetails = "<color=" + color + ">" + missionRouteDetails + "</color>";
                     }
                     description += missionRouteDetails + "\n";
-
+                    //Launch and destination bodies
+                    description += "<b>Launch body:</b> " + missionProfile.launchBodyName +
+                                   ", <b>Destination body:</b> " + missionProfile.destinationBodyName + "\n" +
+                                   "<b>Transfer type:</b> " + transferType + "\n";
                     // Mission-Type:
                     var missionType = MissionProfile.GetMissionProfileTypeName(missionProfile.missionType);
                     if (this.filterMissionType != null)
@@ -190,10 +210,10 @@ namespace KSTS
                     description += "<b>Payload:</b> " + payloadMass;
 
                     // Body:
-                    var bodyName = missionProfile.bodyName;
+                    var bodyName = missionProfile.destinationBodyName;
                     if (this.filterBody != null)
                     {
-                        if (this.filterBody.bodyName != missionProfile.bodyName) { isValidProfile = false; color = red; }
+                        if (this.filterBody.bodyName != missionProfile.destinationBodyName) { isValidProfile = false; color = red; }
                         else color = green;
                         bodyName = "<color=" + color + ">" + bodyName + "</color>";
                     }
@@ -203,11 +223,51 @@ namespace KSTS
                     var maxAltitude = GUI.FormatAltitude(missionProfile.maxAltitude);
                     if (this.filterAltitude != null)
                     {
-                        if (this.filterAltitude > missionProfile.maxAltitude) { isValidProfile = false; color = red; }
-                        else color = green;
+                        if (missionProfile.IsForeignBodyDelivery())
+                        {
+                            // Off-origin delivery: the target must be on the recorded orbit or higher (by periapsis).
+                            if (this.filterPeriapsis != null && this.filterPeriapsis < missionProfile.maxAltitude) { isValidProfile = false; color = red; }
+                            else color = green;
+                        }
+                        else
+                        {
+                            if (this.filterAltitude > missionProfile.maxAltitude) { isValidProfile = false; color = red; }
+                            else color = green;
+                        }
                         maxAltitude = "<color=" + color + ">" + maxAltitude + "</color>";
                     }
                     description += " @ " + maxAltitude + "\n";
+
+                    // Off-origin: target must stay within tolerance of the recorded inclination/eccentricity/LAN.
+                    // Rendered and coloured so the player sees which axis (e.g. an out-of-plane node) rejects it.
+                    if (missionProfile.IsForeignBodyDelivery())
+                    {
+                        var inclination = missionProfile.deployInclination.ToString("0.0") + "°";
+                        if (this.filterInclination != null)
+                        {
+                            if (Math.Abs((double)this.filterInclination - missionProfile.deployInclination) > KSTSSettings.ToleranceInclination) { isValidProfile = false; color = red; }
+                            else color = green;
+                            inclination = "<color=" + color + ">" + inclination + "</color>";
+                        }
+
+                        var eccentricity = missionProfile.deployEccentricity.ToString("0.000");
+                        if (this.filterEccentricity != null)
+                        {
+                            if (Math.Abs((double)this.filterEccentricity - missionProfile.deployEccentricity) > KSTSSettings.ToleranceEccentricity) { isValidProfile = false; color = red; }
+                            else color = green;
+                            eccentricity = "<color=" + color + ">" + eccentricity + "</color>";
+                        }
+
+                        var lan = missionProfile.deployLAN.ToString("0.0") + "°";
+                        if (this.filterLAN != null)
+                        {
+                            if (Math.Abs((double)this.filterLAN - missionProfile.deployLAN) > KSTSSettings.ToleranceLAN) { isValidProfile = false; color = red; }
+                            else color = green;
+                            lan = "<color=" + color + ">" + lan + "</color>";
+                        }
+
+                        description += "<b>Orbit:</b> incl " + inclination + ", ecc " + eccentricity + ", LAN " + lan + "\n";
+                    }
 
                     // Crew-Capacity:
                     var crewCapacity = missionProfile.crewCapacity.ToString("0");

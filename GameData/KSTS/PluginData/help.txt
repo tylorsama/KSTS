@@ -8,6 +8,10 @@ KSTS allows you to automate missions like transporting payloads into space, refu
 While on the launchpad hit "Record" to start recording and then try to reach orbit as fast and efficiently as possible. Once in orbit, you can select your desired payload and hit "Release Payload" (it might be wise to save your game beforehand). This will allow you to later transport a payload with equal mass to a similar orbit. The maximum apoapsis of your future missions will be your current periapsis, so try to fly as high as possible.
 After releasing your payload you can either hit <b>Stop & Save</b> to store the current recording as a new mission-profile, or you can try to return your vessel to Kerbin (if you have a pilot on board, you have to return). If you successfully land your ship, the current value of the vessel will be subtracted from the cost of future missions and you will be able to transport crew-members back to Kerbin with that mission-profile.
 
+<b>Crew validation:</b> if you launched with crew, the recording must end with the exact same headcount you launched with — minus anyone you legally transferred off during a docking, plus anyone you collected. This prevents mid-flight deaths (Kerbalism starvation) or "drop crew somewhere and land empty" tricks from producing a valid profile. If <b>Stop & Save</b> refuses to finish, a message explains the reason (missing crew, wrong body, still in orbit, etc.).
+
+<b>One-way crew missions:</b> after launch, a toggle "One-way crew mission" appears — enable it if your recording delivers crew to destination and you do not intend to fly home. The recording can then be saved wherever you park with all crew alive on board; at execute time those kerbals are transferred to the target vessel.
+
 <size=14><b>Deployment mission-profiles</b></size>
 A deployment mission will allow you to deploy new vessels around Kerbin. 
 For a deployment mission you will need a vessel that has a subset of parts connected to your vessel by decouplers, seperators or docking-ports. Please note that these parts must not be used during your ascent (no running engines, no fuel-consumption), they may not contain any crew-members and they must not contain the root-part of your vessel.
@@ -16,7 +20,11 @@ Once you click "Release Payload", the selected parts will decouple and will coun
 <size=14><b>Transport mission-profiles</b></size>
 To perform a transport-mission your ship will need at least one docking-port as well as some RCS-thrusters for docking. Once you are in orbit, you can select any amount of resources that is still left in your vessel and when you hit "Release Payload", it will get dumped into space. Afterwards you will be able to transport an equivalent amount to other vessels in orbit.
 If you want to record a mission that includes a return-trip, make sure to leave some fuel in the tank.
-Also note that there is no distinction between crew and resource transport-missions, just record a resource-transport mission and you will be able to also shuttle crew-members into orbit, providing your transport-craft has enough seats.
+Also note that there is no distinction between crew and resource transport-missions, just record a resource-transport mission and you will be able to also shuttle crew-members into orbit, providing your transport-craft has enough seats. The profile's crew capacity equals the crew you actually launched with, so record with 4 pilots if you want to shuttle up to 4.
+
+<b>Crew rotation:</b> during recording you can dock to any target and transfer kerbals in either direction — passengers off, station crew on — before undocking and returning. KSTS counts the net exchange and lets the recording finish as long as the final headcount is <i>launched − delivered + collected</i>. This works for asymmetric swaps too (drop 3, pick up 1, return with 2 including your pilot).
+
+<b>Refueling from a station:</b> if you dock to a target during recording and transfer resources onto your ship before undocking, that amount is baked into the profile. Every future mission run on that profile will subtract the same resources from whichever target station you launch it against. Only docking-port dockings are tracked — separators and joint failures are ignored. If you dock with more than one station during recording, all resources are still pulled from a single target at execute time (whichever one the mission is aimed at).
 
 <size=16><b>Deployment missions</b></size>
 To deploy a new vessel into Kerbin's orbit, you just select the desired payload, and then the desired ship/mission-profile which can lift the required mass and a target-orbit. Once the ETA is reached, the new vessel will appear.
@@ -27,6 +35,19 @@ Please note that for technical reasons deployment missions can only be executed 
 To start a transport-mission, select a vessel in orbit around Kerbin and a valid transport mission-profile. Please remember that the target-vessel and the vessel from your mission-profile need matching docking-port types.
 For technical reasons transport missions will only complete on vessels which are not currently active. So once the ETA is reached, you might want to switch to a different vessel for a while or return to the space center.
 For the sake of simplicity crew-members will get transferred at the time mission completes. Which means that there is no time required for possible return-trips and you should leave Kerbals alone, which you have selected to get transported into orbit.
+
+<b>Refuel preview:</b> if the selected profile draws fuel from the target station, the Start Mission screen shows exactly what will be consumed (needed / available per resource). The launch button is disabled if any resource on the target is below what the mission requires.
+
+<size=16><b>Life support integration</b></size>
+KSTS supports Kerbalism and USI-LS if either is installed.
+
+<b>USI:</b> when a deployed vessel spawns with crew, USI per-kerbal timestamps are backdated by the transit duration so their supplies reflect the trip that "happened".
+
+<b>Kerbalism (deployment missions):</b> after a manned ship spawns at destination, KSTS waits for Kerbalism to start simulating it and then subtracts consumption for the full transit time. If the deployed ship does not carry enough life support to survive that, Kerbalism will apply its usual death rules on the next tick — the drain is honest to your profile.
+
+<b>Kerbalism (transport missions):</b> no drain is applied — the target station has been simulated all along and its supplies are already correct. The recording itself proves the shuttle carries enough LS for its own crew during the round-trip, so transport profiles are considered LS-validated.
+
+A yellow warning appears on the crew screen of DEPLOY missions when Kerbalism or USI is installed, reminding you that the deployed ship needs enough onboard supplies for the trip. Transport missions do not show the warning.
 
 <size=16><b>Construction missions</b></size>
 Construction-missions allow you to build new ships directly in orbit which would otherwise be too large to be launched with a deployment-mission. To launch a construction-mission, you will need a space-station in Kerbin orbit (the vessel-type must be <b>station</b>) with at least one engineer on board as well as a transport-mission profile, which is able to reach said space station. The space station will function as your space dock and while the engineer constructs the new vessel, the selected transport-vessel will shuttle all the required parts into orbit.

@@ -87,7 +87,7 @@ namespace KSTS
             }
             else if (targetTemplate != null)
             {
-                remainingSlots = targetTemplate.GetCrewCapacity() - crewToDeliver.Count;
+                remainingSlots = targetTemplate.crewCapacity - crewToDeliver.Count;
             }
 
             if (missionProfile.missionType == MissionProfileType.TRANSPORT)
@@ -182,6 +182,15 @@ namespace KSTS
             var targetCrewCapacity = 0;
             if (targetVessel != null) targetCrewCapacity = TargetVessel.GetCrewCapacity(targetVessel);
             else if (targetTemplate != null) targetCrewCapacity = targetTemplate.crewCapacity;
+
+            // Only for DEPLOY: fresh vessel, Life support not validated by recording. TRANSPORT is validated by recording physics.
+            // TODO: Replace warning with a per-resource preview + gate (storage / rate / duration / remaining on arrival) if\when Kerbalism API will allow it
+            if (missionProfile.missionType == MissionProfileType.DEPLOY &&
+                (KerbalismWrapper.Instance.Present || USILifeSupportWrapper.Instance.Present()))
+            {
+                GUILayout.Label("<color=#FFA500><b>⚠ Life support:</b> KSTS does not verify supplies for the deployed ship. Make sure it carries enough food/water/oxygen for the trip.\n" +
+                                "Kerbals may die after arrival if resources are not sufficient.</color>");
+            }
 
             if (missionProfile.crewCapacity == 0 && missionProfile.missionType == MissionProfileType.TRANSPORT) // We only care about the seats on the transport-vessel during transport-missions.
             {

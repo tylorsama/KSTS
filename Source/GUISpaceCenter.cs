@@ -23,7 +23,9 @@ namespace KSTS
         {
             if (GUI.showGui)
             {
+                var previousMatrix = GUI.BeginScale();
                 GUI.windowPosition = ClickThruBlocker.GUILayoutWindow(winId, GUI.windowPosition, OnWindow, ""); //, GUI.windowStyle);
+                GUI.EndScale(previousMatrix);
             }
         }
 

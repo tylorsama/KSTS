@@ -162,12 +162,17 @@ namespace KSTS
 
                     GameEvents.onStageSeparation.Add(new EventData<EventReport>.OnEvent(this.onStageSeparation));
                     GameEvents.onVesselWasModified.Add(new EventData<Vessel>.OnEvent(this.onVesselModified));
+                    GameEvents.onPartCouple.Add(new EventData<GameEvents.FromToAction<Part, Part>>.OnEvent(FlightRecorder.OnPartCouple));
+                    GameEvents.onVesselsUndocking.Add(new EventData<Vessel, Vessel>.OnEvent(FlightRecorder.OnVesselsUndocking));
                 }
 
                 // Execute the following code only once:
                 if (KSTS.initialized) return;
                 DontDestroyOnLoad(this);
                 KSTS.initialized = true;
+
+                // Load mod-wide tuning values from settings.cfg (once per session):
+                KSTSSettings.Load();
             }
             catch (Exception e)
             {
@@ -205,6 +210,7 @@ namespace KSTS
                 // Call all background-jobs:
                 FlightRecorder.Timer();
                 MissionController.Timer();
+                ResourceDrainer.Timer();
             }
             catch (Exception e)
             {
@@ -290,6 +296,7 @@ namespace KSTS
 
                 FlightRecorder.SaveRecordings(node);
                 MissionController.SaveMissions(node);
+                ResourceDrainer.Save(node);
                 node.AddValue("useKACifAvailable", MissionController.useKACifAvailable);
                 node.AddValue("useStockAlarmClock", MissionController.useStockAlarmClock);
             }
@@ -313,6 +320,7 @@ namespace KSTS
                 GUI.UpdateVesselTemplates();
                 FlightRecorder.LoadRecordings(node);
                 MissionController.LoadMissions(node);
+                ResourceDrainer.Load(node);
 
                 if (node.HasValue("useKACifAvailable"))
                     MissionController.useKACifAvailable = bool.Parse(node.GetValue("useKACifAvailable"));

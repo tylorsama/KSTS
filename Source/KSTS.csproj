@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -13,6 +13,7 @@
     <LangVersion>12</LangVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
+  <KSPBT_CopyDLLsToPluginFolder>false</KSPBT_CopyDLLsToPluginFolder>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -43,12 +44,15 @@
     </Reference>
     <Reference Include="ClickThroughBlocker">
       <HintPath>$(KSPDIR)\GameData\000_ClickThroughBlocker\Plugins\ClickThroughBlocker.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="KSP_Log">
       <HintPath>$(KSPDIR)\GameData\SpaceTuxLibrary\Plugins\KSP_Log.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="SpaceTuxUtility">
       <HintPath>$(KSPDIR)\GameData\SpaceTuxLibrary\Plugins\SpaceTuxUtility.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="KSPDev_Utils">
@@ -56,6 +60,7 @@
     </Reference>
     <Reference Include="ToolbarControl">
       <HintPath>$(KSPDIR)\GameData\001_ToolbarControl\Plugins\ToolbarControl.dll</HintPath>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -83,10 +88,14 @@
     <Compile Include="GUITargetVesselSelector.cs" />
     <Compile Include="InstallChecker.cs" />
     <Compile Include="KACWrapper.cs" />
+    <Compile Include="KerbalismWrapper.cs" />
     <Compile Include="KSTS.cs" />
+    <Compile Include="KSTSSettings.cs" />
+    <Compile Include="ResourceDrainer.cs" />
+    <Compile Include="TransferWindow.cs" />
     <Compile Include="FlightRecorder.cs" />
     <Compile Include="GUI.cs" />
-    <Compile Include="LifeSupportWrapper.cs" />
+    <Compile Include="USILifeSupportWrapper.cs" />
     <Compile Include="MissionController.cs" />
     <Compile Include="OrbitEditor.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -102,9 +111,13 @@
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>AssemblyVersion.cs</LastGenOutput>
     </Content>
+    <Content Include="KSTS.csproj.user" />
   </ItemGroup>
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
@@ -131,10 +144,22 @@ if $(ConfigurationName) == Release (
 
 )
 </PostBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PreBuildEvent>"$(DevEnvDir)\texttransform.exe" "$(ProjectDir)AssemblyVersion.tt"</PreBuildEvent>
-  </PropertyGroup>
+   </PropertyGroup>
+  <!--<PropertyGroup>
+   <PreBuildEvent>"$(DevEnvDir)\texttransform.exe" "$(ProjectDir)AssemblyVersion.tt"</PreBuildEvent>
+ </PropertyGroup>-->
+
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105.The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\JsonPoke.1.2.0\build\JsonPoke.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\JsonPoke.1.2.0\build\JsonPoke.props'))" />
+    <Error Condition="!Exists('..\packages\JsonPoke.1.2.0\build\JsonPoke.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\JsonPoke.1.2.0\build\JsonPoke.targets'))" />
+    <Error Condition="!Exists('..\packages\KSPBuildTools.1.1.1\build\KSPBuildTools.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\KSPBuildTools.1.1.1\build\KSPBuildTools.props'))" />
+    <Error Condition="!Exists('..\packages\KSPBuildTools.1.1.1\build\KSPBuildTools.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\KSPBuildTools.1.1.1\build\KSPBuildTools.targets'))" />
+  </Target>
+  <Import Project="..\packages\JsonPoke.1.2.0\build\JsonPoke.targets" Condition="Exists('..\packages\JsonPoke.1.2.0\build\JsonPoke.targets')" />
+  <Import Project="..\packages\KSPBuildTools.1.1.1\build\KSPBuildTools.targets" Condition="Exists('..\packages\KSPBuildTools.1.1.1\build\KSPBuildTools.targets')" />
   <!--<PropertyGroup>
     <PostBuildEvent>copy /Y "$(TargetPath)" "D:\KSP\KSTS\GameData\KSTS\$(TargetFileName)" &amp;&amp; copy /Y "$(TargetPath)" "D:\KSP\KSP\GameData\KSTS\$(TargetFileName)" &amp;&amp; copy /Y "D:\KSP\KSTS\GameData\KSTS\*" "D:\KSP\KSP\GameData\KSTS\"</PostBuildEvent>
   </PropertyGroup>-->
