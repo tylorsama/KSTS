@@ -247,12 +247,20 @@ namespace KSTS
         // its content: it reports a minimum of 32px and the window keeps whatever height its Rect last had, so every
         // tab was squeezed into the initial 400px and the rest was cut off. Instead we remember each scroll view's
         // content height from the previous repaint and request exactly that, capped to what fits on screen (beyond
-        // that it scrolls). Together with resetting the window height every frame (see FitWindowToContent), the
-        // window grows and shrinks with the active tab.
+        // that it scrolls), and let the window re-fit itself whenever one of those heights or the tab changes.
+        //
+        // Two things keep this from oscillating (the first version flickered):
+        //  * the vertical scrollbar is always shown, so the content width - and therefore text wrapping and the
+        //    measured height - does not change when the scrollbar would otherwise appear or disappear;
+        //  * a measured height only counts as changed if it moves by more than SIZE_TOLERANCE, and the window height
+        //    is only reset on a Layout event after such a change, never on every frame.
         private static readonly Dictionary<string, float> scrollContentHeights = new Dictionary<string, float>();
         private const float DEFAULT_SCROLL_HEIGHT = 300;
         private const float MIN_SCROLL_HEIGHT = 60;
+        private const float SIZE_TOLERANCE = 2;
         private const float WINDOW_CHROME_HEIGHT = 220; // Title, tab bar and the buttons some tabs draw below their list.
+        private static bool windowNeedsFit = true;
+        private static int lastFittedTab = -1;
 
         public static Vector2 BeginAutoScroll(string key, Vector2 scrollPos)
         {
@@ -260,7 +268,8 @@ namespace KSTS
             var scale = (float)KSTSSettings.UiScale;
             var maxHeight = Mathf.Max(MIN_SCROLL_HEIGHT, (Screen.height - windowPosition.y) / scale - WINDOW_CHROME_HEIGHT);
             var height = Mathf.Clamp(contentHeight, MIN_SCROLL_HEIGHT, maxHeight);
-            return GUILayout.BeginScrollView(scrollPos, scrollStyle, GUILayout.Height(height));
+            UiDebug.ScrollRequested(key, contentHeight, height, maxHeight);
+            return GUILayout.BeginScrollView(scrollPos, false, true, HighLogic.Skin.horizontalScrollbar, HighLogic.Skin.verticalScrollbar, scrollStyle, GUILayout.Height(height));
         }
 
         public static void EndAutoScroll(string key)
@@ -271,7 +280,14 @@ namespace KSTS
                 {
                     // Inside the scroll view, the last control's rect is in content coordinates, so its bottom edge is
                     // the content height:
-                    scrollContentHeights[key] = GUILayoutUtility.GetLastRect().yMax + scrollStyle.padding.vertical + 4;
+                    var measured = GUILayoutUtility.GetLastRect().yMax + scrollStyle.padding.vertical + 4;
+                    scrollContentHeights.TryGetValue(key, out float previous);
+                    if (Mathf.Abs(measured - previous) > SIZE_TOLERANCE)
+                    {
+                        UiDebug.ContentMeasured(key, previous, measured);
+                        scrollContentHeights[key] = measured;
+                        windowNeedsFit = true;
+                    }
                 }
                 catch (ArgumentException) { } // Nothing was drawn inside the scroll view this frame.
             }
@@ -279,10 +295,26 @@ namespace KSTS
         }
 
         // Called by the scene helpers right before GUILayoutWindow: a GUILayout window only ever grows to its content's
-        // minimum size, so dropping the height lets it shrink back when a shorter tab is selected.
+        // minimum size, so dropping the height lets it shrink back - but only on the Layout pass after something changed.
         public static void FitWindowToContent()
         {
-            windowPosition.height = 0;
+            if (selectedMainTab != lastFittedTab)
+            {
+                lastFittedTab = selectedMainTab;
+                windowNeedsFit = true;
+            }
+            if (windowNeedsFit && Event.current.type == EventType.Layout)
+            {
+                windowNeedsFit = false;
+                windowPosition.height = 0;
+            }
+        }
+
+        // Called by the scene helpers right after GUILayoutWindow with the rect it returned:
+        public static void WindowDrawn(Rect newPosition)
+        {
+            UiDebug.WindowRect(windowPosition, newPosition, selectedMainTab);
+            windowPosition = newPosition;
         }
 
         // Is called by our helper-classes to draw the actual window:

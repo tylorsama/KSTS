@@ -162,8 +162,8 @@ namespace KSTS
 
                     GameEvents.onStageSeparation.Add(new EventData<EventReport>.OnEvent(this.onStageSeparation));
                     GameEvents.onVesselWasModified.Add(new EventData<Vessel>.OnEvent(this.onVesselModified));
-                    GameEvents.onPartCouple.Add(new EventData<GameEvents.FromToAction<Part, Part>>.OnEvent(FlightRecorder.OnPartCouple));
-                    GameEvents.onVesselsUndocking.Add(new EventData<Vessel, Vessel>.OnEvent(FlightRecorder.OnVesselsUndocking));
+                    GameEvents.onPartCouple.Add(new EventData<GameEvents.FromToAction<Part, Part>>.OnEvent(this.onPartCouple));
+                    GameEvents.onVesselsUndocking.Add(new EventData<Vessel, Vessel>.OnEvent(this.onVesselsUndocking));
                 }
 
                 // Execute the following code only once:
@@ -179,6 +179,11 @@ namespace KSTS
                 Debug.LogError("Awake(): " + e.ToString());
             }
         }
+
+        // KSP's EventData rejects static handlers (EvtDelegate reads evt.Target, which is null for a static method, and
+        // throws), which aborted the rest of Awake whenever Stage Recovery was installed. Route through instance methods:
+        private void onPartCouple(GameEvents.FromToAction<Part, Part> data) => FlightRecorder.OnPartCouple(data);
+        private void onVesselsUndocking(Vessel v1, Vessel v2) => FlightRecorder.OnVesselsUndocking(v1, v2);
 
         // Helper-function to allow us to access the vessel-id in the "onStageSeparation" which detached the most recent stage:
         private void onVesselModified(Vessel data)

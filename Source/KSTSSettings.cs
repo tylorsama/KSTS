@@ -29,6 +29,9 @@ namespace KSTS
         // — reached when the player never brings the deployed ship into physics range for that long:
         public static double PendingDrainMaxAgeYears = 2.0;
 
+        // Logs window/scroll-view sizing to KSP.log with a "[KSTS-UI]" prefix, and warns when a size oscillates:
+        public static bool DebugUI = false;
+
         public static void Load()
         {
             var node = GameDatabase.Instance.GetConfigNodes("KSTS_SETTINGS").FirstOrDefault();
@@ -42,6 +45,7 @@ namespace KSTS
             if (node.HasValue("enforceTransferWindows")) EnforceTransferWindows = bool.Parse(node.GetValue("enforceTransferWindows"));
             if (node.HasValue("transferWindowToleranceDeg")) TransferWindowToleranceDeg = double.Parse(node.GetValue("transferWindowToleranceDeg"));
             if (node.HasValue("pendingDrainMaxAgeYears")) PendingDrainMaxAgeYears = double.Parse(node.GetValue("pendingDrainMaxAgeYears"));
+            if (node.HasValue("debugUI")) DebugUI = bool.Parse(node.GetValue("debugUI"));
             if (UiScale < 0.5) UiScale = 0.5;
             else if (UiScale > 3.0) UiScale = 3.0;
             if (PendingDrainMaxAgeYears < 0) PendingDrainMaxAgeYears = 0;

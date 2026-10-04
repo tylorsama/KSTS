@@ -93,6 +93,7 @@
     <Compile Include="KSTSSettings.cs" />
     <Compile Include="ResourceDrainer.cs" />
     <Compile Include="TransferWindow.cs" />
+    <Compile Include="UiDebug.cs" />
     <Compile Include="FlightRecorder.cs" />
     <Compile Include="GUI.cs" />
     <Compile Include="USILifeSupportWrapper.cs" />
