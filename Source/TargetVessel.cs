@@ -37,7 +37,7 @@ namespace KSTS
             } 
             else 
             {
-                if (vessel.orbit.referenceBody.bodyName != profile.bodyName) return false; // Can only record orbits around the same body as the profile
+                if (vessel.orbit.referenceBody.bodyName != profile.destinationBodyName) return false; // Can only record orbits around the same body as the profile
 
                 bool hasMatchingPort = false;
                 foreach (string dockingPortType in dockingPortTypes)
@@ -121,6 +121,17 @@ namespace KSTS
             return availableResources;
         }
 
+        // Sum current amount of a resource across all proto-parts (works on unloaded vessels).
+        public static double GetResourceAmount(Vessel vessel, string resourceName)
+        {
+            double total = 0;
+            foreach (var protoPart in vessel.protoVessel.protoPartSnapshots)
+                foreach (var protoResource in protoPart.resources)
+                    if (protoResource.resourceName == resourceName)
+                        total += protoResource.amount;
+            return total;
+        }
+
         // Returns the number of seats of the given vessel, even if it is not loaded:
         public static int GetCrewCapacity(Vessel vessel)
         {
@@ -131,23 +142,48 @@ namespace KSTS
 				if (!KSTS.partDictionary.TryGetValue(protoPart.partName, out part)) continue;
 				
                 int partCrewCapacity = part.partPrefab.CrewCapacity;
-                int moduleIdx = 0;
                 foreach (ProtoPartModuleSnapshot module in protoPart.modules)
                 {
-                    if (module.moduleName == "USIAnimation" && module.moduleValues.GetValue("isDeployed") == "True")
+                    if (part.partPrefab.Modules.Contains(module.moduleName))
                     {
-                        partCrewCapacity = part.partPrefab.Modules.GetModule(moduleIdx).Fields.GetValue<int>("CrewCapacity");
+                        if (module.moduleName == "USIAnimation" && module.moduleValues.GetValue("isDeployed") == "True")
+                        {
+                            partCrewCapacity = part.partPrefab.Modules[module.moduleName].Fields.GetValue<int>("CrewCapacity");
+                        }
+                        if ((module.moduleName == "ModuleDeployableCentrifuge" || module.moduleName == "ModuleDeployableHabitat") && module.moduleValues.GetValue("Deployed") == "True")
+                        {
+                            partCrewCapacity = part.partPrefab.Modules[module.moduleName].Fields.GetValue<int>("DeployedCrewCapacity");
+                        }
                     }
-                    if ((module.moduleName == "ModuleDeployableCentrifuge" || module.moduleName == "ModuleDeployableHabitat") && module.moduleValues.GetValue("Deployed") == "True")
-                    {
-                        partCrewCapacity = part.partPrefab.Modules.GetModule(moduleIdx).Fields.GetValue<int>("DeployedCrewCapacity");
-                    }
-                    moduleIdx++;
                 }
                 
                 capacity += partCrewCapacity;
             }
             return capacity;
+        }
+
+        private static int GetCrewCapacity(ProtoPartSnapshot protoPart)
+        {
+            AvailablePart part;
+            if (!KSTS.partDictionary.TryGetValue(protoPart.partName, out part)) return 0;
+            if (part.partPrefab == null) return 0;
+
+            int partCrewCapacity = part.partPrefab.CrewCapacity;
+            int moduleIdx = 0;
+            foreach (ProtoPartModuleSnapshot module in protoPart.modules)
+            {
+                if (module.moduleName == "USIAnimation" && module.moduleValues.GetValue("isDeployed") == "True")
+                {
+                    partCrewCapacity = part.partPrefab.Modules.GetModule(moduleIdx).Fields.GetValue<int>("CrewCapacity");
+                }
+                if ((module.moduleName == "ModuleDeployableCentrifuge" || module.moduleName == "ModuleDeployableHabitat") && module.moduleValues.GetValue("Deployed") == "True")
+                {
+                    partCrewCapacity = part.partPrefab.Modules.GetModule(moduleIdx).Fields.GetValue<int>("DeployedCrewCapacity");
+                }
+                moduleIdx++;
+            }
+
+            return partCrewCapacity;
         }
 
         // Returns the vessel with the given ID, if it exists:
@@ -213,50 +249,59 @@ namespace KSTS
             }
         }
 
-        // Adds the given amount of resources to the (unloaded) ship provided:
+        // Positive amount fills tanks up to maxAmount, negative drains down to 0. Unloaded vessels only.
         public static void AddResources(Vessel vessel, string resourceName, double amount)
         {
-            // While it is possible to manipulate the resources on loaded vessels, our crew-transport missions
-            // only work on unloaded ships and we would have to implement two different routines for this use-case,
-            // so we only allow adding resources on unloaded ships:
             if (vessel.loaded) throw new Exception("TargetVessel.AddResources can only be called on unloaded vessels");
             try
             {
-                var amountToAdd = amount;
-                foreach (var protoPart in vessel.protoVessel.protoPartSnapshots)
-                {
-                    if (amountToAdd <= 0) break;
-                    foreach (var protoResource in protoPart.resources)
-                    {
-                        if (protoResource.resourceName != resourceName) continue;
-                        var partAmount = protoResource.amount; 
-                        var capacity = protoResource.maxAmount - partAmount;
-                        if (capacity <= 0) continue;
-                        if (capacity > amountToAdd)
-                        {
-                            if (capacity - amountToAdd < 0.01) amountToAdd = capacity; // Just to correct some irregularities with floats
-                            protoResource.amount = partAmount + amountToAdd;
-                            amountToAdd = 0;
-                        }
-                        else
-                        {
-                            protoResource.amount = partAmount + capacity;
-                            amountToAdd -= capacity;
-                        }
-                    }
-                }
+                var adding = amount >= 0;
+                var tanks = SelectTanksForTransfer(vessel, resourceName, adding);
+                var transferred = ApplyTransfer(tanks, Math.Abs(amount), adding);
 
-                // Notyfy other mods about the modification of the vessel:
                 GameEvents.onVesselWasModified.Fire(vessel);
-
-                // Log Message about the transfer:
-                Log.Warning("added " + (amount - amountToAdd).ToString() + " / " + amount.ToString() + " of " + resourceName + " to " + Localizer.Format(vessel.vesselName));
-                ScreenMessages.PostScreenMessage(Localizer.Format(vessel.vesselName) + " received " + Math.Round(amount + amountToAdd).ToString() + " of " + resourceName);
+                LogTransfer(vessel, resourceName, Math.Abs(amount), transferred, adding);
             }
             catch (Exception e)
             {
-                Debug.LogError("TargetVessel.AddResources("+ Localizer.Format(vessel.vesselName) + ","+resourceName+","+amount.ToString()+"): " + e.ToString());
+                Debug.LogError("TargetVessel.AddResources(" + Localizer.Format(vessel.vesselName) + "," + resourceName + "," + amount.ToString() + "): " + e.ToString());
             }
+        }
+
+        // Consolidation ordering: on fill, top off fullest first (keeps empties empty);
+        // on drain, empty near-empty first (keeps fullest tanks full).
+        private static IEnumerable<ProtoPartResourceSnapshot> SelectTanksForTransfer(Vessel vessel, string resourceName, bool adding)
+        {
+            var all = vessel.protoVessel.protoPartSnapshots
+                .SelectMany(p => p.resources)
+                .Where(r => r.resourceName == resourceName);
+            return adding ? all.OrderByDescending(r => r.amount) : all.OrderBy(r => r.amount);
+        }
+
+        // Mutates tanks in order until `remaining` is exhausted. Returns actually transferred amount (always positive).
+        private static double ApplyTransfer(IEnumerable<ProtoPartResourceSnapshot> tanks, double remaining, bool adding)
+        {
+            var requested = remaining;
+            foreach (var tank in tanks)
+            {
+                if (remaining <= 0) break;
+                var headroom = adding ? tank.maxAmount - tank.amount : tank.amount;
+                if (headroom <= 0) continue;
+                var take = Math.Min(headroom, remaining);
+                if (headroom - take < 0.01) take = headroom;
+                tank.amount += adding ? take : -take;
+                remaining -= take;
+            }
+            return requested - remaining;
+        }
+
+        private static void LogTransfer(Vessel vessel, string resourceName, double requested, double transferred, bool adding)
+        {
+            var verb = adding ? "added" : "withdrew";
+            var preposition = adding ? " to " : " from ";
+            var screenVerb = adding ? " received " : " lost ";
+            Log.Warning(verb + " " + transferred + " / " + requested + " of " + resourceName + preposition + Localizer.Format(vessel.vesselName));
+            ScreenMessages.PostScreenMessage(Localizer.Format(vessel.vesselName) + screenVerb + Math.Round(transferred) + " of " + resourceName);
         }
 
         // Adds to given kerbal as a crew-member to the (unloaded) vessel:
@@ -288,8 +333,7 @@ namespace KSTS
                 ProtoPartSnapshot targetPart = null;
                 foreach (var protoPart in vessel.protoVessel.protoPartSnapshots)
                 {
-                    if (!KSTS.partDictionary.ContainsKey(protoPart.partName)) continue;
-                    var crewCapacity = KSTS.partDictionary[protoPart.partName].partPrefab.CrewCapacity;
+                    var crewCapacity = GetCrewCapacity(protoPart);
                     if (crewCapacity <= 0) continue;
                     if (protoPart.protoCrewNames.Count >= crewCapacity) continue;
                     targetPart = protoPart;
@@ -341,7 +385,7 @@ namespace KSTS
         }
 
         // Removes the given kerbonaut from the crew of the (unloaded) vessel and returns him to the crew-roster:
-        public static void RecoverCrewMember(Vessel vessel, string kerbonautName)
+        public static bool RecoverCrewMember(Vessel vessel, string kerbonautName)
         {
             // We can only manipulate the crew of an unloaded ship:
             if (vessel.loaded) throw new Exception("TargetVessel.AddCrewMember can only be called on unloaded vessels");
@@ -364,7 +408,7 @@ namespace KSTS
                     // Maybe the plaayer has removed the kerbal from the vessel (eg EVA, docking, etc):
                     Log.Warning("unable to recover kerbonaut "+kerbonautName+" from vessel "+ Localizer.Format(vessel.vesselName) + ", kerbal not found on board");
                     ScreenMessages.PostScreenMessage("Crew-Transfer aborted: Kerbonaut " + kerbonautName + " not present on " + Localizer.Format(vessel.vesselName));
-                    return;
+                    return false;
                 }
 
                 // Remove the kerbal from the part:
@@ -372,7 +416,9 @@ namespace KSTS
                 sourcePart.protoModuleCrew.Remove(kerbonaut);
 
                 // Add the kerbal back to the crew-roster:
+                var oldStatus = kerbonaut.rosterStatus;
                 kerbonaut.rosterStatus = ProtoCrewMember.RosterStatus.Available;
+                GameEvents.onKerbalStatusChanged.Fire(kerbonaut, oldStatus, ProtoCrewMember.RosterStatus.Available);
 
                 // Add the descent-phases to his flight log and archive his flight (commits the flight-current log to his career-log):
                 kerbonaut.flightLog.AddEntry(FlightLog.EntryType.Land, Planetarium.fetch.Home.bodyName);
@@ -384,10 +430,12 @@ namespace KSTS
 
                 Log.Warning("recovered kerbonaut " + kerbonautName + " from vessel " + Localizer.Format(vessel.vesselName));
                 ScreenMessages.PostScreenMessage("Kerbonaut " + kerbonautName + " recovered from " + Localizer.Format(vessel.vesselName));
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogError("TargetVessel.RecoverCrewMember(" + Localizer.Format(vessel.vesselName) + "," + kerbonautName + "): " + e.ToString());
+                return false;
             }
         }
     }

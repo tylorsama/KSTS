@@ -11,6 +11,7 @@ namespace KSTS
     {
         private Vector2 scrollPos = Vector2.zero;
         private int selectedIndex = -1;
+        private string nameSearch = "";
         public Vessel targetVessel = null;
 
         public VesselType? filterVesselType = null;
@@ -34,8 +35,13 @@ namespace KSTS
         // Shows a list of all available target-vessels and returns true, if the player has selected one:
         public bool DisplayList()
         {
+            GUILayout.BeginHorizontal();
             GUILayout.Label("<size=14><b>Target:</b></size>");
-            scrollPos = GUILayout.BeginScrollView(scrollPos, GUI.scrollStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("Filter:");
+            nameSearch = GUILayout.TextField(nameSearch, GUILayout.Width(200));
+            GUILayout.EndHorizontal();
+            scrollPos = GUI.BeginAutoScroll("GUITargetVesselSelector:44", scrollPos);
             var green = "#00FF00";
             var red = "#FF0000";
 
@@ -46,6 +52,18 @@ namespace KSTS
                 if (!TargetVessel.IsValidTarget(vessel)) continue;
                 validTargets.Add(vessel);
             }
+
+            // Filter by the vessel-name search box (covers both target flavours: transport and construction).
+            // Matches vessel name AND the name of the body it orbits, so "duna" surfaces every ship around Duna.
+            if (this.nameSearch != "")
+            {
+                string f = nameSearch.ToLower();
+                validTargets = validTargets.Where(v =>
+                    Localizer.Format(v.vesselName).ToLower().Contains(f)
+                    || (v.mainBody != null && Localizer.Format(v.mainBody.bodyName).ToLower().Contains(f))
+                ).ToList();
+            }
+
             if (selectedIndex >= validTargets.Count)
             {
                 selectedIndex = -1;
@@ -73,7 +91,8 @@ namespace KSTS
                     descriptions.Add("<color=#F9FA86><b>" + Localizer.Format(vessel.vesselName) + "</b></color><color=#FFFFFF>");
 
                     // Orbital-Parameters:
-                    descriptions.Add("<b>Apoapsis:</b> " + GUI.FormatAltitude(vessel.orbit.ApA) + ", <b>Periapsis:</b> " + GUI.FormatAltitude(vessel.orbit.PeA) + ", <b>MET:</b> " + GUI.FormatDuration(vessel.missionTime));
+                    var bodyName = vessel.mainBody != null ? Localizer.Format(vessel.mainBody.bodyName) : "?";
+                    descriptions.Add("<b>Body:</b> " + bodyName + ", <b>Apoapsis:</b> " + GUI.FormatAltitude(vessel.orbit.ApA) + ", <b>Periapsis:</b> " + GUI.FormatAltitude(vessel.orbit.PeA) + ", <b>MET:</b> " + GUI.FormatDuration(vessel.missionTime));
 
                     // Docking-Port Types:
                     var dockingPortsTranslated = new List<string>();
@@ -123,7 +142,7 @@ namespace KSTS
                     targetVessel = validTargets[selectedIndex];
                 }
             }
-            GUILayout.EndScrollView();
+            GUI.EndAutoScroll("GUITargetVesselSelector:44");
             return targetVessel != null;
         }
     }

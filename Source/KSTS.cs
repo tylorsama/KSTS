@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using UnityEngine;
-using System.Reflection;
 using System.Collections.Generic;
 using StageRecovery;
 
@@ -99,7 +98,7 @@ namespace KSTS
     }
 
     [KSPAddon(KSPAddon.Startup.SpaceCentre, true)]
-    public class KSTS : UnityEngine.MonoBehaviour
+    public class KSTS : MonoBehaviour
     {
         private static bool initialized = false;
         public static Dictionary<string, AvailablePart> partDictionary = null;
@@ -111,6 +110,7 @@ namespace KSTS
         // of original-stats library).
         public void Awake()
         {
+			DontDestroyOnLoad(this.gameObject);
             try
             {
                 FlightRecorder.Initialize();
@@ -162,18 +162,28 @@ namespace KSTS
 
                     GameEvents.onStageSeparation.Add(new EventData<EventReport>.OnEvent(this.onStageSeparation));
                     GameEvents.onVesselWasModified.Add(new EventData<Vessel>.OnEvent(this.onVesselModified));
+                    GameEvents.onPartCouple.Add(new EventData<GameEvents.FromToAction<Part, Part>>.OnEvent(this.onPartCouple));
+                    GameEvents.onVesselsUndocking.Add(new EventData<Vessel, Vessel>.OnEvent(this.onVesselsUndocking));
                 }
 
                 // Execute the following code only once:
                 if (KSTS.initialized) return;
                 DontDestroyOnLoad(this);
                 KSTS.initialized = true;
+
+                // Load mod-wide tuning values from settings.cfg (once per session):
+                KSTSSettings.Load();
             }
             catch (Exception e)
             {
                 Debug.LogError("Awake(): " + e.ToString());
             }
         }
+
+        // KSP's EventData rejects static handlers (EvtDelegate reads evt.Target, which is null for a static method, and
+        // throws), which aborted the rest of Awake whenever Stage Recovery was installed. Route through instance methods:
+        private void onPartCouple(GameEvents.FromToAction<Part, Part> data) => FlightRecorder.OnPartCouple(data);
+        private void onVesselsUndocking(Vessel v1, Vessel v2) => FlightRecorder.OnVesselsUndocking(v1, v2);
 
         // Helper-function to allow us to access the vessel-id in the "onStageSeparation" which detached the most recent stage:
         private void onVesselModified(Vessel data)
@@ -205,6 +215,7 @@ namespace KSTS
                 // Call all background-jobs:
                 FlightRecorder.Timer();
                 MissionController.Timer();
+                ResourceDrainer.Timer();
             }
             catch (Exception e)
             {
@@ -290,6 +301,7 @@ namespace KSTS
 
                 FlightRecorder.SaveRecordings(node);
                 MissionController.SaveMissions(node);
+                ResourceDrainer.Save(node);
                 node.AddValue("useKACifAvailable", MissionController.useKACifAvailable);
                 node.AddValue("useStockAlarmClock", MissionController.useStockAlarmClock);
             }
@@ -304,15 +316,21 @@ namespace KSTS
             Log.Warning("KSTS: OnLoad");
             try
             {
+                if(GUI.currentSaveFolder != HighLogic.SaveFolder)
+                {
+                    GUI.Reset();
+                    GUI.currentSaveFolder = HighLogic.SaveFolder;
+                    Debug.Log("[KSTS] Switched to new save: " + GUI.currentSaveFolder);
+                }
+                GUI.UpdateVesselTemplates();
                 FlightRecorder.LoadRecordings(node);
                 MissionController.LoadMissions(node);
+                ResourceDrainer.Load(node);
 
                 if (node.HasValue("useKACifAvailable"))
                     MissionController.useKACifAvailable = bool.Parse(node.GetValue("useKACifAvailable"));
                 if (node.HasValue("useStockAlarmClock"))
                     MissionController.useStockAlarmClock = bool.Parse(node.GetValue("useStockAlarmClock"));
-
-                GUI.Reset();
             }
             catch (Exception e)
             {

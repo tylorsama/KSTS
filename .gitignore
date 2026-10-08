@@ -236,3 +236,7 @@ $RECYCLE.BIN/
 \.vs/
 
 \.idea/
+
+/GameData/KSTS/*.dll
+/GameData/KSTS/*.pdb
+/GameData/KSTS/Plugins/*.pdb

@@ -1,5 +1,29 @@
 ChangeLog
+2.0.5 (tylorsama/KSTS fork)
+        Merged every public fork with code changes since 2.0.4:
+        - Dev-Time: upstream PR #12 by codeandsolder (thumbnails rendered from craft files, cached ship templates), obsolete part-module stripping fix
+        - tius-minecraft: crew transfer to inflatable modules, fill-crew/deselect buttons, recover missions from contracts
+        - SaNya048: the entries below
+        Fixed windows not expanding to show all of their content since the Unity 2019 update (KSP 1.8): scroll views now
+        size to their content (capped to the screen) and the window grows and shrinks with the active tab
+        Added build.ps1 to compile against a local KSP install without Visual Studio
 
+2.0.5-pre (SaNya048)
+        Feature added - Kerbalism support:
+        - Payload vessels in Deploy mission will be drained on Food/Water/etc upon arrival
+        - Due Kerbalism API limitations it is not possible to precalculate drain before the mission starts, only when vessel is open in tracking station (and Kerbalism stuff is initialised)
+    	- For the same reason Recyclers and Greenhouses are not counted, only static supplies 
+        - For Transport missions with crew the recorder will check, if player managed to deliver Kerbals alive to target before saving record.  
+        Feature added - Crew rotation Transport missions - you can deliver AND take kerbals from station during one mission
+        Feature added - Refueling on destination vessel for Transport mission.  Used fuel will be substracted from station tanks
+        Feature added - Multi-body mission profiles. Only the recorded orbit is available for any planet except the launch planet (with configurable tolerance)
+        Added external config file 
+        UI improvement - UI scaling, name filtering for target windows
+        Ship spawning was rewritten to use an unloaded ProtoVessel. This removes out-of-flight-scene NREs and terrain "kills"
+        Mod had some USILifeSupport handling, I did`t tocuhed it much, so it probably will work now with ship creation fixed.This will require testing, though
+        Fixed bug with resources draining causing payload part invalidation
+        (Temporary) Fixed NPE-spam from broken thumbnail generation. My own version of fix before codeand`s PR was merged to master
+        (Temporary) Fixed DLL duplication when compiling DLL to KSP folder. I assume codeandsolder`s PR also fixed it
 2.0.4
 	Thanks to github user @abel1502 for this:
 		Support inflatable modules from SSPXr and USI

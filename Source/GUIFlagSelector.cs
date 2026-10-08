@@ -34,7 +34,7 @@ namespace KSTS
             {
                 flagIcon = new Texture2D(58, 32, TextureFormat.RGBA32, false);
                 flagIcon.LoadImage(File.ReadAllBytes(flagFilename));
-                flagIcon = GUI.ResizeTexture(flagIcon, 96, 60);
+                flagIcon = ThumbnailHelper.ResizeTexture(flagIcon, 96, 60);
             }
             else
             {
